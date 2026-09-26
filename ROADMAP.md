@@ -190,6 +190,33 @@ class, taken across the archive):
 3. `MATMUL` is part of the op set but unused by the shipped graph; Phase 2
    (fastText-shaped distillation) is the natural place to exercise it.
 
+### 7. Repository hygiene (done before Phase 2)
+
+Phase 1 was developed without version control; the tree is now a git repository
+(initial commit on `main`) with:
+
+- **`.gitignore`/`.gitattributes`** that keep the 107 MB Speech Commands archive
+  and all build scratch out of history, while tracking the frozen certificate
+  inputs: the 9.2 MB precomputed corpus and both 0.1 MB checkpoints (verified
+  byte-identical to the working tree after staging, and `.pt` blobs are marked
+  binary so nothing rewrites them).
+- **`README.md`** (install, three-command quick start, the Phase 1 certificate
+  with its caveats, dataset policy), **`LICENSE`** (MIT) and **`pyproject.toml`**
+  licence/classifier metadata.
+- **`.github/workflows/ci.yml`**: CPU-only PyTorch, `pip install -e ".[test]"`,
+  a CLI smoke test, the certificate command and the full suite on every push.
+  The archive-dependent tests report `skipped` on CI; the KWS
+  accuracy/budget cheque runs, because the corpus and checkpoint are tracked.
+- **Two robustness fixes** found by simulating CI (running the suite with the
+  data files moved away): `tests/test_kws_e2e.py` skipped on a missing
+  checkpoint but then raised `FileNotFoundError` on a missing corpus, and
+  `tests/test_kws.py` resolved its data paths relative to the current working
+  directory instead of the repository.
+- **`kiln/cli.py`**: `--runtime-header None` used to emit `#include "None"`; it
+  now produces a self-contained translation unit (regression-tested, compiles
+  with `gcc -std=c99 -Wall -Wextra -Werror -pedantic`), which is what the
+  README's two-line build example relies on.
+
 ---
 
 ## Phase 2 Detail (DRAFT): Synthetic-Data Distillation Pipeline

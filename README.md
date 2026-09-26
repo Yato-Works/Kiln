@@ -29,7 +29,7 @@ independent Python reference (`kiln.ref`) and to the PyTorch model it came from.
 ## Quick start
 
 ```bash
-git clone <this-repository> kiln && cd kiln
+cd /path/to/kiln
 python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[test]"
 ```
@@ -39,7 +39,7 @@ Three commands — no dataset download, no compiler needed:
 ```bash
 python -m kiln ops                            # 1. the 7 IR operations (the whole instruction set)
 python -m kiln audit examples/kws/model.py    # 2. static footprint certificate (add --json for machines)
-python -m pytest tests/ -q                    # 3. every guarantee (75 tests, ~1 min)
+python -m pytest tests/ -q                    # 3. every guarantee (77 tests, ~1 min)
 ```
 
 Emit the C yourself and build it with any C99 compiler:
@@ -81,7 +81,7 @@ Two caveats, both documented in `ROADMAP.md`:
 | :--- | :--- | :---: | :--- |
 | `examples/kws/kws_processed_data.pt` | 9.2 MB | yes | frozen 4,890-clip log-mel corpus + split — the certificate input |
 | `examples/kws/kws_qat_weights.pt` | 0.1 MB | yes | the shipped int8 checkpoint |
-| `examples/kws/kws_trained_weights.pt` | 0.1 MB | yes | dB-domain checkpoint used by the deployability study in `ROADMAP.md` §4.3 |
+| `examples/kws/kws_trained_weights.pt` | 0.1 MB | yes | dB-domain checkpoint written by `examples/kws/train.py` and consumed by `ptq_test.py` (`ROADMAP.md` §4, finding 3) |
 | `speech_commands_test_set_v0.02.tar.gz` | 107 MB | no | raw WAVs for the end-to-end audio tests; without it those tests report `skipped` |
 
 The raw archive is a separate download (Speech Commands v0.02 test set) and is expected

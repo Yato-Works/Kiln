@@ -67,6 +67,32 @@ def test_cli_compile(sample_model_file: Path, temp_dir: Path, capsys: pytest.Cap
     assert "compiled_model.c" in captured.out
 
 
+def test_cli_compile_runtime_header_none_is_self_contained(
+    sample_model_file: Path, temp_dir: Path
+) -> None:
+    """`--runtime-header None` must drop the include, not emit `#include "None"`."""
+    out_c = temp_dir / "self_contained.c"
+    ret = main(
+        ["compile", str(sample_model_file), "-o", str(out_c), "--runtime-header", "None"]
+    )
+    assert ret == 0
+    content = out_c.read_text(encoding="utf-8")
+    assert '#include "None"' not in content
+    assert "#include <stdint.h>" in content
+
+
+def test_cli_compile_runtime_header_is_forwarded(
+    sample_model_file: Path, temp_dir: Path
+) -> None:
+    """A custom header name is passed through verbatim (the default behaviour)."""
+    out_c = temp_dir / "with_shim.c"
+    ret = main(
+        ["compile", str(sample_model_file), "-o", str(out_c), "--runtime-header", "my_shim.h"]
+    )
+    assert ret == 0
+    assert '#include "my_shim.h"' in out_c.read_text(encoding="utf-8")
+
+
 def test_cli_audit_text(sample_model_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ret = main(["audit", str(sample_model_file)])
     assert ret == 0
