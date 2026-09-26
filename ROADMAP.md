@@ -273,6 +273,43 @@ The output is a small label set; the input is text, so the graph is
 `EMBEDDING`/`MATMUL`-shaped — deliberately the opposite of Phase 1's convolution stack,
 which is what makes it a *generality* proof rather than a second benchmark.
 
+#### IR amendment: `MAXPOOL1D(axis=...)` (2026-09-26)
+
+Kiln's frozen op set could not express a token bag, which is what this task
+needs: `EMBEDDING` (rank-1 uint8 tokens) and `MATMUL` always put the token axis
+*first*, while `MAXPOOL1D` only reduced the *last* axis.  "Pool over the tokens"
+therefore failed validation (`maxpool1d node 'op_pool': kernel 24 exceeds
+padded input length 3`), and the closest expressible graph silently pooled the
+*class* axis instead: it returned label 5 for a 3-class problem, because the IR
+checks tensor shapes, not intent.
+
+`MAXPOOL1D` therefore gained an integer `axis` attribute whose default is
+`rank - 1`, so **every existing graph emits byte-identical C**: hashing the
+shipped KWS translation unit and the toy test graph before and after the change
+gave `1441f1de…` and `79d20551…` both times, and the certificate still reads
+1,992 B / 39,614 B.  With `axis = 0` the window runs over the leading axis and
+keeps the trailing axes as an inner block, i.e. `pooled[0, c] = max over tokens`
+-- the bag a hazardous-API classifier needs.  `tests/test_diff.py` pins the new
+shape (`EMBEDDING -> MATMUL -> MAXPOOL1D(axis=0) -> ARGMAX`, bit-exact against
+`kiln.ref` through gcc-compiled C) and the failure modes it replaces
+(out-of-range axis, and the wrong-axis kernel that used to pass validation).
+
+Measured footprint of that shape (audited with `kiln.budget.report`, emitted C
+bit-exact against the reference in every row):
+
+| Tokens (bag) | `dim` | Labels | Arena | ROM | MACs | Fits 2 KB? |
+| ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| 96 | 8 | 6 | 1,344 B | 2,096 B | 4,608 | yes |
+| 128 | 4 | 6 | 1,280 B | 1,048 B | 3,072 | yes |
+| 192 | 4 | 6 | 1,920 B | 1,048 B | 4,608 | yes |
+| 128 | 8 | 12 | 2,560 B | 2,144 B | 12,288 | no |
+| 256 | 4 | 12 | 4,096 B | 1,072 B | 12,288 | no |
+
+The arena is exactly `tokens * (dim + labels)`, so the 2 KB cap binds the
+*feature window*, not the weights: `dim` 4-8 and a handful of labels are
+effectively free, while a 256-token window costs 4,096 B.  Open question 5 below
+is therefore a question about the window, not about the model size.
+
 ### Design gates (each one is a Phase 1 lesson, applied in advance)
 
 | Gate | Rule | Phase 1 precedent |
@@ -287,9 +324,9 @@ which is what makes it a *generality* proof rather than a second benchmark.
 
 | # | Deliverable | Acceptance test |
 | :---: | :--- | :--- |
-| M2.0 | Feature-contract spec (tokenizer, vocabulary size, int8 packing, unknown-token policy) | written in this file + round-trip unit test |
+| M2.0 | Feature-contract spec (tokenizer, vocabulary size, int8 packing, unknown-token policy) | written in this file + round-trip unit test; IR prerequisite `MAXPOOL1D(axis=0)` **done** (see the amendment above) |
 | M2.1 | Meta-prompt generator + synthesis harness producing the frozen corpus | manifest hash reproduces the corpus bit-exactly |
-| M2.2 | int8 student (EMBEDDING + MATMUL + LUT + ARGMAX) trained by distillation, lowered to Kiln IR | arena/ROM audited; `MATMUL` and `EMBEDDING` leave the "unexercised" list |
+| M2.2 | int8 student (`EMBEDDING` + `MATMUL` + `MAXPOOL1D(axis=0)` + `ARGMAX`) trained by distillation, lowered to Kiln IR | arena/ROM audited (table above); `MATMUL` and `EMBEDDING` leave the "unexercised" list |
 | M2.3 | Showdown report: Kiln student vs fastText vs rules baseline, with CIs | numbers in this section, reproducible by one command |
 | M2.4 | PCM→C equivalent: raw source text -> fixed-point tokenizer -> emitted graph, all C | a Phase 1b-style `tests/test_*.py` bit-exactness check |
 | M2.5 | Differential-fuzzing distillation loop (unlabeled code as a fuzzing oracle) | documented as an experiment, success or failure |
@@ -307,6 +344,9 @@ which is what makes it a *generality* proof rather than a second benchmark.
 4. **Distillation signal**: hard labels only, or teacher logits (soft targets)?  Only hard
    labels survive Kiln's integer contract without a new "soft-label" training path.
 5. **Budget target**: is <= 2 KB the right student size for a vocabulary-sized `MATMUL`, or
-   does this task need a different (ROM-heavy, RAM-light) envelope?
+   does this task need a different (ROM-heavy, RAM-light) envelope?  Measured: the arena is
+   `tokens * (dim + labels)`, so the current cap allows a 96-token window at `dim` 8 / 6
+   labels (1,344 B) or 192 tokens at `dim` 4 (1,920 B), while a 256-token, 12-label model
+   needs 4,096 B -- keeping 2 KB decides the snippet window, not the model size.
 
 

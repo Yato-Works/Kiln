@@ -636,7 +636,17 @@ def _validate_maxpool1d(ctx: _OpContext) -> None:
 
 
 
-    length = ctx.input.shape[-1]
+    shape = ctx.input.shape
+
+    axis = ctx.int_attr("axis", minimum=0, default=len(shape) - 1)
+
+    if axis >= len(shape):
+
+        ctx.fail(f"axis {axis} is outside the input rank {len(shape)}")
+
+
+
+    length = shape[axis]
 
     kernel = ctx.int_attr("kernel_size", minimum=1, default=length)
 
@@ -648,20 +658,19 @@ def _validate_maxpool1d(ctx: _OpContext) -> None:
 
     output_length = _window_output_length(length, kernel, stride, padding)
 
-
-
     if output_length is None:
 
         ctx.fail(f"kernel {kernel} exceeds padded input length {length + 2 * padding}")
 
 
 
-    ctx.require_shape(ctx.output, ctx.input.shape[:-1] + (output_length,))
+    # ``axis`` defaults to the last axis, reproducing the original single-axis
 
+    # pooling exactly; ``axis=0`` pools the leading (token) axis, which is what
 
+    # a text/bag-shaped model needs (ROADMAP.md Phase 2).
 
-
-
+    ctx.require_shape(ctx.output, shape[:axis] + (output_length,) + shape[axis + 1:])
 def _validate_argmax(ctx: _OpContext) -> None:
 
     ctx.require_rank(ctx.input, minimum=1)

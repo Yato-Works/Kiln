@@ -37,6 +37,8 @@ _PADDING_ATTR: Final = "padding"
 
 _KERNEL_ATTR: Final = "kernel_size"
 
+_AXIS_ATTR: Final = "axis"
+
 _TABLE_ATTR: Final = "table"
 
 
@@ -993,7 +995,27 @@ def _emit_maxpool1d(node: Node, ctx: _Context) -> list[str]:
 
 
 
-    *leading, length = input_desc.shape
+    shape = input_desc.shape
+
+    axis = _int_attr(node, _AXIS_ATTR, len(shape) - 1, minimum=0)
+
+    if axis >= len(shape):
+
+        raise ValueError(
+
+            f"maxpool1d axis {axis} is outside the input rank {len(shape)}: {node.name}"
+
+        )
+
+
+
+    outer = math.prod(shape[:axis])
+
+    length = shape[axis]
+
+    inner = math.prod(shape[axis + 1:])
+
+
 
     kernel = _int_attr(node, _KERNEL_ATTR, length, minimum=1)
 
@@ -1001,48 +1023,81 @@ def _emit_maxpool1d(node: Node, ctx: _Context) -> list[str]:
 
     padding = _int_attr(node, _PADDING_ATTR, 0, minimum=0)
 
+
+
     output_length = _window_length("maxpool1d", node, length, kernel, stride, padding)
 
-
-
-    _require_shape("maxpool1d", node, output_desc, (*leading, output_length))
+    _require_shape("maxpool1d", node, output_desc, (*shape[:axis], output_length, *shape[axis + 1:]))
 
 
 
     x, y = _io_symbols(node)
 
+    bounds = _indent(_indent(_window_bounds(length, kernel, stride, padding)))
+
+
+
+    if inner == 1:
+
+        # Byte-identical to the pre-``axis`` emission, which is the default case.
+
+        body = [
+
+            *bounds,
+
+            "        int8_t best = INT8_MIN;",
+
+            "        for (int k = first; k < last; ++k) {",
+
+            f"            int8_t value = {x}[g * {length} + origin + k];",
+
+            "            if (value > best) best = value;",
+
+            "        }",
+
+            f"        {y}[g * {output_length} + op] = best;",
+
+        ]
+
+    else:
+
+        body = [
+
+            *bounds,
+
+            f"        for (int i = 0; i < {inner}; ++i) {{",
+
+            "            int8_t best = INT8_MIN;",
+
+            "            for (int k = first; k < last; ++k) {",
+
+            f"                int8_t value = {x}[(g * {length} + origin + k) * {inner} + i];",
+
+            "                if (value > best) best = value;",
+
+            "            }",
+
+            f"            {y}[(g * {output_length} + op) * {inner} + i] = best;",
+
+            "        }",
+
+        ]
+
 
 
     return [
 
-        f"for (int g = 0; g < {math.prod(leading)}; ++g) {{",
+        f"for (int g = 0; g < {outer}; ++g) {{",
 
         f"    for (int op = 0; op < {output_length}; ++op) {{",
 
-        *_indent(_indent(_window_bounds(length, kernel, stride, padding))),
-
-        "        int8_t best = INT8_MIN;",
-
-        "        for (int k = first; k < last; ++k) {",
-
-        f"            int8_t value = {x}[g * {length} + origin + k];",
-
-        "            if (value > best) best = value;",
-
-        "        }",
-
-        f"        {y}[g * {output_length} + op] = best;",
+        *body,
 
         "    }",
 
         "}",
 
     ]
-
-
-
-
-
 def _emit_argmax(node: Node, ctx: _Context) -> list[str]:
 
     if ctx.output(node).shape != ():

@@ -292,7 +292,7 @@ def cmd_ops(_args: argparse.Namespace) -> int:
         ("MATMUL", "Linear / GEMM", "Quantized matrix multiplication with Q31 scale and shift"),
         ("ADD", "Elementwise", "Elementwise tensor addition with saturating requantization"),
         ("LUT", "Non-linear", "256-entry static lookup table for arbitrary activations (ReLU, GELU, etc.)"),
-        ("MAXPOOL1D", "Pooling", "1D windowed max-pooling over feature/spatial dimensions"),
+        ("MAXPOOL1D", "Pooling", "1D windowed max-pooling over the last axis (axis=0 pools the leading axis)"),
         ("ARGMAX", "Reduction", "Finds index of maximum value; serves as deterministic graph exit"),
     ]
     for name, cat, desc in op_infos:

@@ -46,6 +46,8 @@ _PADDING_ATTR: Final = "padding"
 
 _KERNEL_ATTR: Final = "kernel_size"
 
+_AXIS_ATTR: Final = "axis"
+
 _TABLE_ATTR: Final = "table"
 
 
@@ -680,7 +682,33 @@ def _maxpool1d(node: Node, ctx: _Context) -> None:
 
 
 
-    *leading, length = input_desc.shape
+    shape = input_desc.shape
+
+    axis = _int_attr(node, _AXIS_ATTR, len(shape) - 1, minimum=0)
+
+    if axis >= len(shape):
+
+        raise ValueError(
+
+            f"maxpool1d axis {axis} is outside the input rank {len(shape)}: {node.name}"
+
+        )
+
+
+
+    # ``axis == rank - 1`` (the default) keeps the historical layout: the window
+
+    # runs over the last axis and ``inner`` is 1.  ``axis = 0`` pools the leading
+
+    # axis instead and keeps the trailing axes as the inner block.
+
+    outer = math.prod(shape[:axis])
+
+    length = shape[axis]
+
+    inner = math.prod(shape[axis + 1:])
+
+
 
     kernel = _int_attr(node, _KERNEL_ATTR, length, minimum=1)
 
@@ -688,40 +716,37 @@ def _maxpool1d(node: Node, ctx: _Context) -> None:
 
     padding = _int_attr(node, _PADDING_ATTR, 0, minimum=0)
 
+
+
     output_length = _window_length("maxpool1d", node, length, kernel, stride, padding)
 
-
-
-    _require_shape("maxpool1d", output_desc, (*leading, output_length))
+    _require_shape("maxpool1d", output_desc, (*shape[:axis], output_length, *shape[axis + 1:]))
 
 
 
     result: list[int] = []
 
+    for group in range(outer):
 
-
-    for group in range(math.prod(leading)):
-
-        row = values[group * length:(group + 1) * length]
-
-
+        base = group * length * inner
 
         for out_pos in range(output_length):
 
             origin = out_pos * stride - padding
 
-            window = row[max(origin, 0):max(origin + kernel, 0)]
+            first = max(origin, 0)
 
-            result.append(max(window, default=INT8_MIN))
+            last = min(origin + kernel, length)
+
+            for slot in range(inner):
+
+                window = [values[base + position * inner + slot] for position in range(first, last)]
+
+                result.append(max(window, default=INT8_MIN))
 
 
 
     ctx.write(output_desc, result)
-
-
-
-
-
 def _argmax(node: Node, ctx: _Context) -> None:
 
     input_desc, output_desc = ctx.input(node), ctx.output(node)
