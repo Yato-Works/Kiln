@@ -1,6 +1,11 @@
 # Normalize text to LF in the repository, check out per platform.
 * text=auto
 
+# The hazard corpus/held-out bytes are digested byte-exactly by
+# examples/hazard/data/manifest.json (Gate G2): never convert their line
+# endings on any platform, or verify_manifest() fails after a fresh clone.
+examples/hazard/data/*.json -text
+
 # Binary artifacts must never be line-ending converted.
 *.pt binary
 *.ptc binary
