@@ -1,0 +1,1502 @@
+[
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "method = getattr(self, req.action)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert password_hash == compute_hash(password)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(calc_string)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(user_expression)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert check_signature(req.body, req.sig)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(f'ls {dir_path}', shell=True)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "config = {'timeout': 30, 'retries': 3}"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "state = pickle.loads(b64decode(user_blob))"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "ret = getattr(worker, task_type)(payload)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user.is_authenticated"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "deser = pickle.loads(memview.tobytes())"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "ckpt = torch.load(remote_url, weights_only=False)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tempfile.mktemp(suffix='.tmp')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "os.mkfifo(f'/tmp/ipc_{channel}')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "fd = os.open('/tmp/exclusive.tmp', os.O_CREAT | os.O_WRONLY)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "buffer = bytearray(1024)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "recovered = pickle.loads(compressed_pickle)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert peer_cert.subject == EXPECTED_DN"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.popen(f'netstat -an | grep {port}')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "total = sum(prices)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'service {svc_name} restart')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(f'service.{action}()')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval('__import__(\"os\").system(\"id\")')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "out = os.popen(f'grep {pattern} {path}').read()"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user.has_role('moderator')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert current_user.can_delete(doc_id)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "run_pipe = '/tmp/cmd.pipe'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "d = shelve.open('cache.db')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "indices = np.arange(len(samples))"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(rule.condition)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert api_key in VALID_API_KEYS"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "mapping = collections.defaultdict(list)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "f = open('/tmp/scratch.dat', 'wb')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tmp_dest = '/tmp/' + os.path.basename(orig)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "func = getattr(module, handler_name)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "call = getattr(dispatcher, event_type)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "valid = all(c.isalnum() for c in token)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "obj = jsonpickle.decode(raw_json)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "cache_obj = pickle.load(cache_file)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "rate = requests / max(1, duration)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "f_out = open('/tmp/render_' + str(id) + '.png', 'wb')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "payload = jsonpickle.loads(request.body)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "res = pickle.loads(base64.b64decode(b64_str))"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "f = open(f'/tmp/buffer_{stream_id}.bin', 'wb')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "session = pickle.loads(cookie)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "val = jsonpickle.decode(serialized_val)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "os.tmpnam()"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "return {'success': True, 'data': result}"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "obj = _pickle.loads(socket.recv(1024))"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'zip -r {archive} {dir_name}')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert req.user == document.author"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "data = marshal.loads(user_input)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert permission_mask & PERM_WRITE != 0"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "t = tempfile.mktemp(prefix='kiln_')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "res = os.popen(f'dig +short {domain}').read()"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "path = os.tempnam('/var/tmp', 'upload_')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.check_output(raw_cmd, shell=True)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.popen('curl -s ' + url)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "obj.__getattribute__(cmd)()"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user.account_status == 'active'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "parsed = yaml.load(manifest)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "temp_sock = '/tmp/app.sock'"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(request.GET['expr'])"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(f'data.{column}.apply()')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "doc = yaml.load(user_template)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert session['user_id'] is not None"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "model = torch.load(user_path, weights_only=False)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system('cat ' + unescaped_path + ' > out.txt')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "cleaned = text.lower().strip()"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user.level >= ACCESS_LEVEL_MANAGER"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tempfile.mktemp(dir='/tmp')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(user_script)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'ping -c 1 {host}')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "temp_loc = tempfile.mktemp(suffix='.json')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(uploaded_macro)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "params = {'page': page_num, 'limit': 50}"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "logger.debug(f'Processing batch {batch_idx}')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "with open(f'/tmp/{job_id}.log', 'w') as f: f.write(data)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "assert size > 0, 'size must be positive'"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert acl.allows(actor, resource)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.Popen(f'node server.js {port}', shell=True)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user.is_admin, 'Access denied'"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "path = f'/var/tmp/{service}.pid'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "db_shelf = shelve.open(f'data/{user}.db')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "func = getattr(driver, command_name)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system('rm -rf ' + target_dir)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(request.form['payload'])"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "time.sleep(retry_backoff_seconds)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "os.tempnam('/tmp', 'prefix_')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "logger.info('User logged in successfully')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "version = tuple(map(int, ver_str.split('.')))"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "return eval(formula, scope)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(open(user_path).read())"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "func = globals().get(handler_var)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "data = json.loads(payload)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.check_output(f'head -n 20 {logfile}', shell=True)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "path = os.path.join('/var/tmp', session_name)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "mod = __import__(request.args['mod'])"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "obj = yaml.unsafe_load(raw_text)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'nslookup {hostname}')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "parsed = urllib.parse.urlparse(target_url)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "fn = getattr(api_router, endpoint)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "data = _pickle.loads(net_buffer)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert session['role'] == 'administrator'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "state = _pickle.load(stream)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "res = yaml.load(spec_yaml, Loader=yaml.CLoader)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "delta = datetime.timedelta(days=7)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(f'{a} + {b}')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "summary = collections.Counter(labels)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert session.get('logged_in') is True"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "out = open('/tmp/' + user_name + '.txt', 'w')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "state = pickle.load(open(path, 'rb'))"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "klass = eval(class_name)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "t_name = tempfile.mktemp(suffix='.log')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert signature_valid(message, sig, pubkey)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "name, ext = os.path.splitext(filename)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system('git clone ' + repo_url)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert verify_nonce(nonce, timestamp)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.call(f'unzip {zip_path}', shell=True)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(decrypted_code)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "flag = bool(flags & 0x01)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "tags = set(item.tags).intersection(allowed)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(compile(raw_code, 'dyn', 'exec'))"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(f'mysqldump {db_name}', shell=True)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "target = f'/tmp/cache_{hash_val}.dat'"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(f'sed -i s/foo/bar/ {file}', shell=True)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "status_code = 200"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "score = max(0.0, min(1.0, raw_score))"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(user_code_block)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "db = shelve.open(session_id)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.popen(f'cat {filename}').read()"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tmp_path = tempfile.mktemp(dir='/var/tmp')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert validate_csrf(csrf_token)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "user_data = {'id': 1, 'email': 'john@example.com'}"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "data = pickle.loads(zlib.decompress(blob))"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "path = os.path.join(base_dir, 'static', 'style.css')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(script_buffer.getvalue())"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert credentials.is_valid()"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "result = eval(input('expression: '))"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert verify_jwt(token)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "p = '/tmp/worker_' + str(os.getpid())"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "scratch_file = tempfile.mktemp(prefix='scratch_')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "path = os.tempnam()"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "out_tmp = open('/tmp/export.csv', 'w')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(compile(source, 'user', 'eval'))"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(compile(template_py, 'tmpl', 'exec'))"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "payload = marshal.loads(code_blob)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "lock_file = '/tmp/process.lock'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "res = jsonpickle.decode(json_str)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "path = os.tempnam('tmp_')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "state = pickle.loads(request.data)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert role in ['admin', 'superuser']"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert cert.is_trusted and cert.not_expired"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "return math.sqrt(dx**2 + dy**2)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert grant.is_active and not grant.is_expired"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "output = eval(query_filter)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "user = pickle.loads(req.session_token)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "os.system('cat /tmp/data > ' + output)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "cfg = yaml.load(data, Loader=yaml.Loader)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.check_call(f'tar -czf {out} {src}', shell=True)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert auth_header.startswith('Bearer ')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user.tenant_id == resource.tenant_id"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert verify_signature(payload, signature)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(sys.stdin.read())"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "compiled = compile(raw_source, '<string>', 'exec')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "key = base64.b64encode(raw_bytes).decode('ascii')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'userdel -r {old_user}')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'crontab {cron_file}')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.popen(f'ps aux | grep {proc}').readlines()"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tfile = tempfile.mktemp(prefix='task_')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user_id == target_id, 'Unauthorized'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "cfg = yaml.load(config_str)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert is_whitelisted(ip_address)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert token == expected_token"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "os.symlink(dest, '/tmp/current_job')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "fifo = '/tmp/my_fifo'; os.mkfifo(fifo)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.Popen(cmd_string, shell=True)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.Popen(f'python {script}', shell=True)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.Popen(f'sh run.sh {arg}', shell=True)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.call(cmd, shell=True)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "dump_path = '/tmp/core_dump.raw'"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert req.headers.get('X-Secret') == API_KEY"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "os.symlink(target, '/tmp/latest')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "getattr(context, req_attr)(*params)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(custom_plugin_code)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "record = pickle.load(fp)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.popen(f'find . -name {query}')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "metrics.increment('request.count')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "session = requests.Session()"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(body.decode('utf-8'))"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert check_permission(user, 'write')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "cache[key] = response.json()"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'openssl enc -d -in {file}')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.check_output(f'echo {msg}', shell=True)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "__import__(f'plugins.{plugin_id}')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "state = jsonpickle.decode(payload)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "queue.append(task_id)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "loaded_yaml = yaml.load(user_yaml)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "df = pd.DataFrame(records)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "code = compile(expr, 'calc', 'single')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "with open('/tmp/job.pid', 'w') as fp: fp.write(str(pid))"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "loaded = pickle.load(file_handle)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "output = io.StringIO()"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "res = dict(zip(keys, values))"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "target = getattr(builtins, user_fn)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "node = tree.find('child')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "assert len(tokens) == 96, 'invalid length'"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert client_ip in TRUSTED_PROXIES"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.check_call(f'make {target}', shell=True)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "return hashlib.sha256(data).hexdigest()"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(f'def {name}(): pass')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "__import__('sys').modules[mod_name]"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "with open(f'/tmp/sync_{node}.state', 'w') as f: f.write(s)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert caller.has_privilege('root')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user.has_perm('change_setting')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "target_dir = f'/tmp/unpack_{job_id}'"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "out = open(f'/tmp/{worker_name}.out', 'a')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "obj = eval(type_name)()"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert token_expiry > time.time()"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.popen(f'whois {domain}').read()"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'useradd -m {username}')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "cached = pickle.load(f_handle)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "val = marshal.loads(raw_bytecode)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "m = marshal.loads(pyc_header_stripped)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert session.get('is_authenticated')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert hmac.compare_digest(sig, mac)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "obj = yaml.load(stream, Loader=yaml.UnsafeLoader)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "state = pickle.load(io.BytesIO(buffer))"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.call(f'scp {src} {remote}:/tmp', shell=True)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert client.is_internal_network()"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert actor.is_superuser, 'Superuser required'"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(f'iptables -A INPUT -s {ip} -j DROP', shell=True)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "uuid_str = str(uuid.uuid4())"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'docker build -t {tag} .')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "f = open('/tmp/temp_config.yaml', 'w')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "return f'{user.first_name} {user.last_name}'"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "path = f'/tmp/report_{quarter}.pdf'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "store = shelve.open(untrusted_shelf)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert request.auth_token == secret_key"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "row = cursor.fetchone()"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(request.args['cmd'])"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(code_str, {'__builtins__': None})"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "temp_log = f'/tmp/audit_{date}.log'"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert check_mfa_token(user, mfa_code)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "exec(code_snippet)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'chmod +x {file_path}')"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(f'pdf2txt.py {pdf_path}', shell=True)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "obj = marshal.loads(chunk)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(f'rsync -avz {src} {dest}', shell=True)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "records.sort(key=lambda x: x['timestamp'])"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "data = pickle.loads(request.get_data())"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "getattr(obj, dangerous_attr)()"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tmp_file = '/tmp/' + filename"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "meta = yaml.load(meta_stream)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "obj = yaml.unsafe_load(content)"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert request.headers.get('Authorization')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "items = [x * 2 for x in values if x > 0]"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert user_group in ['security', 'ops']"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tempfile.mktemp(prefix='db_dump_')"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert claims['iss'] == 'auth.example.com'"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "session_obj = pickle.load(session_file)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "res = eval(req.args.get('calc'))"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert is_valid_license(license_key)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "data = pickle.loads(raw_bytes)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "result = re.search(r'^[a-z0-9_-]+$', slug)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "entry = {'timestamp': time.time(), 'val': v}"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tmp = '/tmp/cache_' + str(user_id)"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "formatted = f'{prefix}_{counter:04d}.bin'"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "count = len([x for x in data if x.is_active])"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "coords = (lat, lon)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "obj = yaml.load(yaml_str)"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "token_data = pickle.loads(auth_blob)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "fifo_name = f'/tmp/pipe_{uid}'"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'kill -9 {pid}')"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "return eval(f'math.{op}({arg})')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "inst = pickle.loads(token_bytes)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "with open('/tmp/token.txt', 'w') as f: f.write(tok)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "globals()[func_name](*args)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'nmap -sP {subnet}')"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "headers = {'Content-Type': 'application/json'}"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(['bash', '-c', user_command])"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert origin in ALLOWED_ORIGINS"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "path = os.tmpnam()"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "data = os.popen(f'df -h {mount_point}').read()"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert request.remote_addr == '127.0.0.1'"
+  },
+  {
+    "label": "benign",
+    "label_id": 0,
+    "snippet": "return [item.to_dict() for item in queryset]"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "temp_path = os.path.join('/tmp', f'run_{uuid}')"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "open(f'/tmp/upload_{token}', 'wb').write(chunk)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "__import__(plugin_name)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.system(f'chown {user} {filepath}')"
+  },
+  {
+    "label": "deserialization",
+    "label_id": 2,
+    "snippet": "db = shelve.open(user_db_path)"
+  },
+  {
+    "label": "tempfile",
+    "label_id": 4,
+    "snippet": "tmp = tempfile.mktemp()"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.call(f'gzip {archive}', shell=True)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.Popen(f'traceroute {ip}', shell=True)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.call(f'7z x {archive}', shell=True)"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "subprocess.run(f'ffmpeg -i {src} {dst}', shell=True)"
+  },
+  {
+    "label": "dynamic_exec",
+    "label_id": 1,
+    "snippet": "eval(request.headers['X-Formula'])"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert session['csrf_secret'] == post_secret"
+  },
+  {
+    "label": "shell_injection",
+    "label_id": 3,
+    "snippet": "os.popen(f'uptime').read()"
+  },
+  {
+    "label": "unsafe_validation",
+    "label_id": 5,
+    "snippet": "assert current_user.id == resource.owner_id"
+  }
+]

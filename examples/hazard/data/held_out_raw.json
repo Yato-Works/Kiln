@@ -1,0 +1,242 @@
+[
+  {
+    "snippet": "result = [x * 2 for x in items if x > 0]",
+    "label": "benign"
+  },
+  {
+    "snippet": "logger.info('Connection established from %s:%d', host, port)",
+    "label": "benign"
+  },
+  {
+    "snippet": "data = json.loads(payload.decode('utf-8'))",
+    "label": "benign"
+  },
+  {
+    "snippet": "return hashlib.sha256(password.encode()).hexdigest()",
+    "label": "benign"
+  },
+  {
+    "snippet": "parser.add_argument('--batch-size', type=int, default=32)",
+    "label": "benign"
+  },
+  {
+    "snippet": "status = http.HTTPStatus.NOT_FOUND",
+    "label": "benign"
+  },
+  {
+    "snippet": "return math.sqrt(dx * dx + dy * dy)",
+    "label": "benign"
+  },
+  {
+    "snippet": "headers = {'Authorization': f'Bearer {token}'}",
+    "label": "benign"
+  },
+  {
+    "snippet": "cache.set(cache_key, response_data, timeout=300)",
+    "label": "benign"
+  },
+  {
+    "snippet": "df['moving_avg'] = df['close'].rolling(window=14).mean()",
+    "label": "benign"
+  },
+  {
+    "snippet": "result = eval(user_input_expression)",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "exec(code_object, namespace)",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "handler = getattr(controller, action_name)",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "compiled_code = compile(untrusted_code, '<string>', 'exec')",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "func = globals().get(request_handler_name)",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "mod = __import__(plugin_module_name)",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "exec(compile(raw_payload, '<eval>', 'exec'))",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "return eval(f'{arg1} + {arg2}')",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "res = eval(request.GET['formula'])",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "getattr(target_instance, method_name)(*args)",
+    "label": "dynamic_exec"
+  },
+  {
+    "snippet": "user_session = pickle.loads(raw_cookie_data)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "state = pickle.load(open(state_file, 'rb'))",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "doc = yaml.load(yaml_blob)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "config = yaml.load(user_stream, Loader=yaml.Loader)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "code_obj = marshal.loads(serialized_code)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "database = shelve.open(user_provided_db_path)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "obj = jsonpickle.decode(incoming_json_str)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "data = _pickle.loads(base64.b64decode(payload))",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "saved_model = torch.load(user_weights_path, weights_only=False)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "obj = yaml.unsafe_load(untrusted_yaml_content)",
+    "label": "deserialization"
+  },
+  {
+    "snippet": "os.system(f'ping -c 1 {remote_host}')",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "subprocess.run(f'ls -la {target_directory}', shell=True)",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "output = os.popen(f'cat {unquoted_filename}').read()",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "proc = subprocess.Popen(command_string, shell=True)",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "os.system('rm -rf ' + directory_to_delete)",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "res = subprocess.check_output(f'echo {msg}', shell=True)",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "subprocess.call(f'tar -czf {out} {src}', shell=True)",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "os.system(request.form['shell_cmd'])",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "subprocess.check_call(user_cmd, shell=True)",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "lines = os.popen('find ' + search_root).readlines()",
+    "label": "shell_injection"
+  },
+  {
+    "snippet": "temp_filename = tempfile.mktemp()",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "filepath = os.tempnam()",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "with open('/tmp/' + user_filename, 'w') as f: f.write(content)",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "target = tempfile.mktemp(prefix='kiln_', suffix='.dat')",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "path = os.path.join('/tmp', f'cache_{user_id}.tmp')",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "fd = open(f'/tmp/job_{job_id}.run', 'wb')",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "os.symlink(target_source, '/tmp/active_symlink')",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "fifo_path = '/tmp/worker.fifo'; os.mkfifo(fifo_path)",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "temp_lock = '/tmp/exclusive_lock.pid'",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "out_file = os.tmpnam()",
+    "label": "tempfile"
+  },
+  {
+    "snippet": "assert auth.is_authenticated",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert current_user.is_admin, 'Permission denied'",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert session.get('user_id') == expected_user_id",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert client_token == secret_auth_token",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert check_access_permission(actor, target_resource)",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert hmac.compare_digest(user_sig, expected_sig)",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert request.remote_addr in ALLOWED_PROXIES",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert 'admin' in user.roles, 'Role missing'",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert verify_signature(body, signature_header)",
+    "label": "unsafe_validation"
+  },
+  {
+    "snippet": "assert session.get('authenticated') is True",
+    "label": "unsafe_validation"
+  }
+]

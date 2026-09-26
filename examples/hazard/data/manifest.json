@@ -1,0 +1,19 @@
+{
+  "classes": [
+    "benign",
+    "dynamic_exec",
+    "deserialization",
+    "shell_injection",
+    "tempfile",
+    "unsafe_validation"
+  ],
+  "corpus_sha256": "5d00a3a25e2e12867f76b692cca91131ff6c6f1904479ccc49babd7ea86bd40a",
+  "held_out_sha256": "bdc5be967d22a1551642ac83f0c87c49e5a8f20af32609a17326fdd24482f014",
+  "num_classes": 6,
+  "num_held_out": 60,
+  "num_samples": 300,
+  "split_seed": 1337,
+  "teacher_model": "meta-llama/llama-3.3-70b-instruct",
+  "token_count": 96,
+  "window_bytes": 48
+}
