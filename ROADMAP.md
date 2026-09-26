@@ -9,7 +9,7 @@
 | Phase | Title | Core Objective | Key Deliverables & Milestones | Status |
 | :---: | :--- | :--- | :--- | :---: |
 | **0** | **核の確立 (Core Invariants)** | 決定論的整数コンパイラ核の完成 | 5核ファイル、KIR.md凍結、差分・極値・タイブレーク検証 (全50件グリーン) | **DONE** |
-| **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,173 params, 89.10%) + PCM→C E2E parity | **DONE** |
+| **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
 | **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | UPCOMING |
 | **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml`、自動タスク振り分け、アーキテクチャ探索 (RAM/ROM/レイテンシ パレート解) | PLANNED |
 | **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | 実機ファーム検証 (Pi/Cortex-M)、残存能力監査 (Linear Probing)、区間境界伝播、`kiln link` | PLANNED |
@@ -43,32 +43,36 @@ under "Known gaps" below.
 
 ### 1. Phase 1a certificate (shipped artifact, frozen split seed 1337)
 
-Reproduce with `python -m examples.kws.train_aug` (300 epochs, no augmentation,
-`examples/kws/kws_qat_weights.pt`) and `python -m examples.kws.evaluate`
-(734 held-out clips, never seen in training or model selection).  Training is
-only close-to-reproducible — three runs of that command span ~1 point of test
-accuracy (finding 5); the emitted C and every number below re-derive exactly
-from the shipped `.pt` file.
+Reproduce with `python -m examples.kws.train_aug --seed 777` (300 epochs, no
+augmentation, `examples/kws/kws_qat_weights.pt`) and `python -m examples.kws.evaluate`
+(734 held-out clips, never seen in training or model selection); the layout is
+the 27/56 one.  Training is only close-to-reproducible — runs of that command
+span ~1 point of test accuracy (finding 5) — while the emitted C and every
+number below re-derive exactly from the shipped `.pt` file.
 
 | Metric | Target | Measured |
 | :--- | :--- | :--- |
-| Arena RAM (`.bss`, zero-malloc) | < 2,048 B | **1,972 B** |
-| Constant ROM (int8 weights + LUT tables) | < 40,960 B | **39,197 B** (38,173 + 1,024) |
-| Parameters | ~38.6K (MLPerf DS-CNN small) | **38,173** |
-| MACs per inference | — | **310,382** |
-| Kiln C99 int8 top-1 accuracy | ~92.2% (MLPerf reference) | **89.10%** (654/734) |
-| PyTorch FP32 top-1 (same int8 inputs) | — | 88.69% |
-| FP32 vs C99 prediction agreement | — | **99.18%** |
-| Quantization accuracy delta | >= 0 | **+0.41%** |
+| Arena RAM (`.bss`, zero-malloc) | < 2,048 B | **1,992 B** |
+| Constant ROM (int8 weights + LUT tables) | < 40,960 B | **39,614 B** (38,590 + 1,024) |
+| Parameters | ~38.6K (MLPerf DS-CNN small) | **38,590** |
+| MACs per inference | — | **314,342** |
+| Kiln C99 int8 top-1 accuracy | ~92.2% (MLPerf reference) | **91.01%** (668/734) |
+| PyTorch FP32 top-1 (same int8 inputs) | — | 90.74% |
+| FP32 vs C99 prediction agreement | — | **98.50%** |
+| Quantization accuracy delta | >= 0 | **+0.27%** |
 | Ops used | Kiln's 7 ops only | 5x `CONV1D`, 4x `LUT`, 4x `MAXPOOL1D`, 1x `ARGMAX` |
 
-Validation-split accuracy of the same checkpoint: FP32 91.27% / C99 91.00%.
+Validation-split accuracy of the same checkpoint: FP32 91.54% / C99 91.68%.
 The accuracy column carries the +/-2.2 point binomial spread of a 734-clip test
-set.  Four runs of the shipped recipe (two seeds, 300 epochs, no augmentation)
-produced FP32 test accuracy 90.05 / 89.78 / 89.51 / 88.69 with validation
-90.59 / 91.13 / 91.00 / 91.27, so the shipped checkpoint is the
-*highest-validation* run even though it is not the highest-test one —
-re-selecting on test accuracy would be test-set leakage (finding 5 below).
+set.  The checkpoint (seed 777, 300 epochs, no augmentation) is both the
+*highest-validation* and the highest-test run measured on this corpus, so
+validation-driven selection (finding 4 below) no longer trades test accuracy
+away.  Its layout was over budget at 3,316 B until the allocator learned to
+reuse the block a finished stage frees (finding 2 in section 6); the narrower
+27/55 layout it replaced stays available as the `previous` preset, and its four
+300-epoch runs spanned FP32 test 88.69-90.05 with validation 90.59-91.27
+(`python -m examples.kws.qat_eval --architecture previous --weights
+examples/kws/kws_qat_weights_27_55.pt` reprints its v1 certificate).
 
 ### 2. Where the sub-2 KB file comes from
 
@@ -78,16 +82,19 @@ the resulting blocks; both are verified in `tests/test_inplace.py` and
 
 | Arena plan | Bytes |
 | :--- | ---: |
-| First-Fit over every tensor, graph input copied into the arena | 3,288 |
-| + in-place `LUT` fusion (4 aliases: `t_relu0..3 -> t_conv0..3`) | 2,464 |
-| + zero-copy graph inputs (`const uint8_t *input_bytes`) | **1,972** |
+| Every tensor placed, graph input copied into the arena | 3,296 |
+| + in-place `LUT` fusion (4 aliases: `t_relu0..3 -> t_conv0..3`) | **1,992** |
+| + zero-copy graph inputs (`const uint8_t *input_bytes`) | **1,992** |
 
-1,972 B is that graph's floor rather than a First-Fit artefact: the first stage's
-1,324 B output block is still live while its 648 B pooled tensor is written
-(live peak 1,972 B), so no placement can beat it, and the allocator rewrite in
-section 6 finding 2 leaves the shipped layout byte-identical.
+The LUT fusion alone already reaches this graph's floor: the first stage's
+1,324 B output block stays live while its 648 B pooled tensor is written, and the
+second convolution's 1,344 B has to sit next to that pooled tensor, i.e.
+648 + 1,344 = 1,992 B, so no placement can beat it.  Dropping the input copy no
+longer moves the total (a graph input is only live at op 0, so the allocator
+packs it into a gap); it is what lets the C API read the caller's buffer, and it
+was worth 492 B under the First-Fit-only planner.
 
-That is **-1,316 B (-40%)** without changing the arithmetic: the emitted C is
+That is **-1,304 B (-40%)** without changing the arithmetic: the emitted C is
 still bit-exact against `kiln.ref.run_ref` (25/25 samples in `tests/test_kws.py`,
 24/24 utterances in `tests/test_kws_e2e.py`).
 
@@ -95,22 +102,23 @@ still bit-exact against `kiln.ref.run_ref` (25/25 samples in `tests/test_kws.py`
 
 `train_aug.py --architecture <preset>` lists the layouts; `arena`/`ROM` are the
 audited numbers of the emitted C, `test` is the script's FP32 top-1 on the 734
-held-out clips (the emitted-C figure for the shipped row is section 1's 89.10%).
+held-out clips (the emitted-C figure for the shipped row is section 1's 91.01%).
 
 | Preset | Pooled frames | Params | Arena | ROM | Test accuracy (seeds) |
 | :--- | ---: | ---: | ---: | ---: | :--- |
+| `shipped` (27/56), 300 ep | 24 | 38,590 | **1,992 B** | 39,614 B | **90.74** / 89.92 |
+| `previous` (27/55), 300 ep | 24 | 38,173 | **1,972 B** | 39,197 B | 90.05 / 89.78 / 89.51 / 88.69 |
 | `wide_second` (26/64), 120 ep | 24 | 38,548 | 2,160 B | 39,572 B | 88.42 / 88.01 |
 | `wide_second`, 300 ep | 24 | 38,548 | 2,160 B | 39,572 B | **90.60** |
-| `narrow_second` (27/56), 300 ep | 24 | 38,590 | **1,992 B** | 39,614 B | **90.74** / 89.92 |
-| `shipped` (27/55), 300 ep | 24 | 38,173 | **1,972 B** | 39,197 B | 90.05 / 89.78 / 89.51 / 88.69 |
 | `stage3` (31/64), 300 ep | 16 | 36,302 | 2,016 B | 37,326 B | 89.65 / 88.69 |
 | `pool5` (35/128), 300 ep | 9 | 33,110 | 2,032 B | 33,878 B | 89.24 |
 | `pool4` (33/128), 120 ep | 12 | 32,242 | 2,016 B | 33,010 B | 87.74 |
 | `small` (32/48), 120 ep | 24 | 6,144 | 2,336 B | 6,656 B | 90.87 |
 
-The arena column is re-audited with `kiln.ir.arena` (section 6 finding 2);
-only `narrow_second` and `wide_second` move (3,316 -> 1,992 B and
-3,436 -> 2,160 B), everything else was already at its live peak.
+The arena column is re-audited with `kiln.ir.arena` (section 6 finding 2): the
+promoted `shipped` layout moves 3,316 -> 1,992 B and `wide_second`
+3,436 -> 2,160 B, while `previous` was already at its live peak (1,972 B) and
+stays byte-identical.
 
 The arena is bounded by **two** live-peak terms, not one: while a stage's pooled
 tensor is still live the next convolution writes its own output, so a first
@@ -124,23 +132,24 @@ First-Fit-only planner needed the harsher `c1 * L0 <= c0 * 49` instead, which
 capped a 27-channel first stage at 55 channels: `c1 = 56` needs 1,344 B for a
 1,324 B freed block, so First-Fit appended the whole block after the live pooled
 tensor and the arena jumped from 1,972 B to 3,316 B -- 1,344 B of RAM for a 20 B
-shortfall.  That cliff is what forced the best layout measured on this corpus
-(`narrow_second`: val 91.54 / test 90.74 FP32, 91.68 / 91.01 through the emitted
-C, seed 777) over budget; the interval-aware allocator packs it into 1,992 B,
-exactly its own live peak, and raises the compliant ceiling to `c1 <= 58` at
-`c0 = 27` (2,040 B) or `c1 <= 57` at `c0 = 28` (2,044 B).  Whether the
-certificate should therefore ship `narrow_second` instead of the 27/55 layout is
-a separate decision -- section 6 finding 2 records the allocator change itself.
-Both layouts stay reproducible:
-`python -m examples.kws.qat_eval --architecture narrow_second --weights examples/kws/kws_narrow_second_weights.pt`
-reprints 91.01% (C99) / 90.74% (FP32) on the frozen split.
+shortfall.  That cliff is what kept the best layout measured on this corpus
+(val 91.54 / test 90.74 FP32, 91.68 / 91.01 through the emitted C, seed 777) out
+of the budget; the interval-aware allocator packs it into 1,992 B, exactly its
+own live peak, and raises the compliant ceiling to `c1 <= 58` at `c0 = 27`
+(2,040 B) or `c1 <= 57` at `c0 = 28` (2,044 B).  The certificate therefore ships
+it as `shipped` (section 1), and the 27/55 layout it replaced stays reproducible
+as the `previous` preset:
+`python -m examples.kws.qat_eval --architecture previous --weights examples/kws/kws_qat_weights_27_55.pt`
+reprints v1's 89.10% (C99) / 88.69% (FP32) on the frozen split.
 
 ### 4. Findings that shaped the shipped recipe
 
 1. **Training budget beats architecture here.** Going from 120 to 300 epochs
    moved the reference layout from 88.42% to 90.60% test, and from 88.96% to
    89.65% (best of two seeds) for `stage3`; no compliant layout beat the long
-   schedule.  Every compliant candidate lands in 87.7-90.1%.
+   schedule.  Every layout measured under the First-Fit-only planner landed in
+   87.7-90.1%; the wider arena ceiling the allocator unlocked bought the best
+   layout of all back (91.01% int8 C, section 1).
 2. **Augmentation hurt.** With identical architecture and seed, the int8-domain
    augmentation preset scored 85.69% vs 88.42% test on the reference layout and
    87.06% vs 90.87% on the small layout (120 epochs), so the shipped checkpoint
@@ -154,23 +163,22 @@ reprints 91.01% (C99) / 90.74% (FP32) on the frozen split.
    therefore not a trick but a requirement; `python -m examples.kws.ptq_test` and
    `python -m examples.kws.qat_eval` print both numbers.
 4. **Selection noise.** With 734 test clips the 95% confidence interval is about
-   +/-2.2 points, so the 1-point gaps between compliant layouts are not
-   significant.  The shipped layout was selected by *validation* accuracy
-   (91.27% vs 90.59% across seeds) and is the closest match to the MLPerf
-   DS-CNN footprint.
+   +/-2.2 points, so sub-point gaps between compliant layouts are not
+   significant.  Selection therefore uses *validation* accuracy only: the
+   shipped checkpoint is the highest-validation run measured here (91.54% FP32 /
+   91.68% C99), and its layout is the closest fit to the MLPerf DS-CNN footprint
+   that satisfies both budgets.
 5. **Training is close-to-reproducible; the compiler is exactly reproducible.**
-   `python -m examples.kws.train_aug` re-creates the shipped recipe from scratch
-   (same split, same seeds, same schedule), but three runs of the identical
-   command gave FP32 val 91.13 / 91.27 / 91.00 and FP32 test 89.78 / 88.69 /
-   89.51 (a second seed adds 90.59 / 90.05) — CUDA convolution reductions
-   (TF32, non-deterministic cuDNN kernels)
-   are not bit-stable, so a re-run lands within about a point instead of
-   bit-identically, and validation-driven selection can therefore pick a run
-   whose test score is not the best of the three (as it did here).  Everything
+   `python -m examples.kws.train_aug --seed 777` re-creates the shipped recipe
+   from scratch (same split, same schedule), but CUDA convolution reductions
+   (TF32, non-deterministic cuDNN kernels) are not bit-stable, so a re-run
+   lands within about a point instead of bit-identically: four 300-epoch runs
+   of the previous 27/55 layout spread FP32 validation 90.59-91.27 and test
+   88.69-90.05, which is why selection uses the validation split.  Everything
    downstream of the checkpoint *is* deterministic: `emit_c`, `audit_graph`, the
    gcc-built benchmark and `kiln.ref.run_ref` take no random input, and every
    test in `tests/` is an equality or bit-exactness check — re-emitting the C
-   from the shipped checkpoint reproduces 39,197 B of ROM and 1,972 B of arena
+   from the shipped checkpoint reproduces 39,614 B of ROM and 1,992 B of arena
    on every run.  A bit-identical *checkpoint* would need a deterministic
    training setup (CPU training or `torch.use_deterministic_algorithms(True)`);
    that was not needed for Phase 1, whose artifact is the frozen `.pt` file.
@@ -189,28 +197,31 @@ class, taken across the archive):
 | PCM-to-label path vs the PyTorch pipeline | 24/24 identical labels |
 | PCM-to-label top-1 accuracy against ground truth | 23/24 = 95.8% (asserted >= 75%) |
 
+`pytest tests/test_kws_e2e.py -s` reprints all three counts (the test reports
+`skipped` when the 107 MB archive is absent, as on CI).
+
 ### 6. Known gaps / follow-ups
 
-1. **92.2% is not reached (89.10% int8 C for the shipped checkpoint; the best
-   measured int8 C run of this layout is 90.05%).** The
-   Phase 1a corpus is 4,890 clips with
-   3,423 training clips, while the MLPerf DS-CNN reference trains on the full
-   ~105K-clip set.  Training accuracy saturates at 99.85% while validation
-   plateaus near 91%, i.e. the model is data-limited, not compiler-limited; the
-   2 KB arena cap costs at most a few tenths of a validation point (the
-   over-budget twins in section 3), so it is not the binding constraint either.
+1. **92.2% is not reached (91.01% int8 C for the shipped checkpoint; the best
+   measured int8 C run of the previous 27/55 layout was 90.05%).** The Phase 1a
+   corpus is 4,890 clips with 3,423 training clips, while the MLPerf DS-CNN
+   reference trains on the full ~105K-clip set.  Training accuracy saturates at
+   99.85% while validation plateaus near 91.5%, i.e. the model is data-limited,
+   not compiler-limited, and the 2 KB arena cap no longer excludes the best
+   layout either (finding 2 brought the promoted one from 3,316 B to 1,992 B).
    Acquiring the full corpus is the cheapest next gain (the frontend pipeline is
    already in place for it).
 2. **First-Fit left memory on the table -- fixed.** Placement now lives in
    `kiln.ir.arena`: it evaluates the historical First-Fit insertion layout plus
    size-descending first-fit/best-fit candidates and keeps the smallest, so it
    can only ever shrink the arena and never changes a layout that was already
-   minimal.  Measured on section 3's presets: shipped 1,972 B (unchanged, it is
-   the live peak), `narrow_second` 3,316 -> **1,992 B** (compliant again),
+   minimal.  Measured on section 3's presets: `previous` 1,972 B (unchanged -- it
+   is its live peak, so its layout does not move), the promoted `shipped` layout
+   3,316 -> **1,992 B** (compliant, and now the certificate artifact), and
    `wide_second` 3,436 -> 2,160 B (still over: its live peak is 2,160 B).  The
    compliant search space therefore grows from `c1 <= 55` to `c1 <= 58` at
-   `c0 = 27`; re-searching architectures inside the wider bound, and deciding
-   which checkpoint the certificate ships, are Phase 3 items.
+   `c0 = 27`; re-searching architectures inside the wider bound (`c0 = 28` and
+   `c1 = 58` were never trained) stays a Phase 3 item.
 
 3. `MATMUL` is part of the op set but unused by the shipped graph; Phase 2
    (fastText-shaped distillation) is the natural place to exercise it.
@@ -222,7 +233,7 @@ Phase 1 was developed without version control; the tree is now a git repository
 
 - **`.gitignore`/`.gitattributes`** that keep the 107 MB Speech Commands archive
   and all build scratch out of history, while tracking the frozen certificate
-  inputs: the 9.2 MB precomputed corpus and both 0.1 MB checkpoints (verified
+  inputs: the 9.2 MB precomputed corpus and all three 0.1 MB checkpoints (verified
   byte-identical to the working tree after staging, and `.pt` blobs are marked
   binary so nothing rewrites them).
 - **`README.md`** (install, three-command quick start, the Phase 1 certificate
@@ -268,7 +279,7 @@ which is what makes it a *generality* proof rather than a second benchmark.
 | :--- | :--- | :--- |
 | **G1 Feature contract first** | Freeze the exact integer tokenizer/feature contract *before* any training run; the C runtime sees `uint8` tokens and int8 features, never floats or dB | §4 finding 3 — dB-domain training scored 50.54 % through the emitted C |
 | **G2 Frozen corpus** | The synthesized dataset is a checked-in artifact with a manifest (teacher model + version, prompt hash, decoding params, seed, corpus hash). No live API calls inside tests or pipelines | the frozen split seed (1337) and the tracked 9.2 MB corpus |
-| **G3 Real held-out set** | "Synthetic data works" is only meaningful against *real, never-synthesized* code, and against a naive baseline (regex/allow-list) and fastText | §3's `narrow_second` twin: accuracy claims need a control |
+| **G3 Real held-out set** | "Synthetic data works" is only meaningful against *real, never-synthesized* code, and against a naive baseline (regex/allow-list) and fastText | §3's `previous` twin (27/55): accuracy claims need a control |
 | **G4 Equal-budget showdown** | fastText is compared at the *same* footprint (<= 2 KB arena / <= 40 KB ROM), not at equal accuracy | §3's arena cliff (closed by `kiln.ir.arena`) |
 | **G5 Selection by validation** | Test accuracy is reported, never used to pick a checkpoint; report confidence intervals | §4 finding 4 — 734 clips is +/-2.2 points |
 

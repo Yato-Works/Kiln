@@ -241,11 +241,13 @@ def test_kws_end_to_end_c_pipeline_matches_pytorch(e2e_exe: Path) -> None:
 
     correct = 0
     pipeline_agreement = 0
+    bit_exact = 0
     for (name, truth, pcm), (prediction, features) in zip(cases, outputs):
         # 1. The generated graph must be bit-exact on the C frontend's features.
         reference_label = run_ref(
             graph, {"graph_in": features.flatten().tolist()}, weights
         )["graph_out"][0]
+        bit_exact += int(prediction == reference_label)
         assert prediction == reference_label, (
             f"{name}: compiled C graph disagrees with kiln.ref.run_ref"
         )
@@ -266,4 +268,11 @@ def test_kws_end_to_end_c_pipeline_matches_pytorch(e2e_exe: Path) -> None:
     assert agreement >= MIN_AGREEMENT, (
         f"end-to-end agreement {agreement * 100:.1f}% < {MIN_AGREEMENT * 100:.0f}% "
         f"({pipeline_agreement}/{len(cases)})"
+    )
+    # Printed so the Phase 1b certificate line in ROADMAP.md section 5 (and the
+    # README table) can be reproduced with `pytest tests/test_kws_e2e.py -s`.
+    print(
+        f"PCM -> label via the generated C: {bit_exact}/{len(cases)} bit-exact vs kiln.ref, "
+        f"{correct}/{len(cases)} correct ({accuracy * 100:.1f}%), "
+        f"{pipeline_agreement}/{len(cases)} identical to the PyTorch pipeline"
     )

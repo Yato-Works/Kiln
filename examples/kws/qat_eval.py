@@ -6,15 +6,16 @@ int8 C accuracy and the FP32 accuracy of the same checkpoint on the frozen test
 split, so the quantization delta of the *emitted artifact* is visible without
 the full``evaluate.py`` parity table.
 
-Run from the repository root with ``python -m examples.kws.qat_eval``.  Any
+Run from the repository root with ``python -m examples.kws.qat_eval`` (the
+certificate layout prints 91.01% for the emitted C and 90.74% for FP32).  Any
 architecture preset can be audited the same way, which is how the alternative
 layouts in ``ROADMAP.md`` section 3 stay reproducible:
 
-    python -m examples.kws.qat_eval --architecture narrow_second \
-        --weights examples/kws/kws_narrow_second_weights.pt
+    python -m examples.kws.qat_eval --architecture previous \
+        --weights examples/kws/kws_qat_weights_27_55.pt
 
-prints 91.01% for the emitted C and 90.74% for FP32 (seed 777), i.e. the layout
-the interval-aware allocator packs into 1,992 B of arena.
+reprints the previous 27/55 layout's certificate (89.10% int8 C / 88.69% FP32,
+1,972 B of arena) from its kept checkpoint.
 """
 
 from __future__ import annotations

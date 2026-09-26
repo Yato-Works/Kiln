@@ -52,22 +52,27 @@ SCALE_DB: float = 40.0 / 127.0
 #:     arena stays at that peak instead of growing by whole blocks: the
 #:     allocator, not the weights, decides which tensor reuses which gap.
 #:
-#: With ``(27, 5, 2, 2)`` the first stage costs 27 * 73 = 1,971 B and the second
-#: convolution needs 55 * 24 = 1,320 B <= 27 * 49 = 1,323 B, so it lands inside
-#: the recycled block and the total stays at 1,972 B in the emitted C.  Every
-#: later stage is far smaller (<= 672 B), because the time axis is already short.
+#: With ``(27, 5, 2, 2)`` the first stage's output (27 * 49 = 1,323 B) and its
+#: pooled tensor (27 * 24 = 648 B) are the peak at 1,972 B after alignment; the
+#: ``(56, 3, 1, 4)`` successor needs 56 * 24 = 1,344 B next to that pooled
+#: tensor, i.e. 1,992 B, so the arena lands on 1,992 B in the emitted C (this is
+#: the layout Phase 1's certificate is taken from: it was over budget at 3,316 B
+#: until ``kiln.ir.arena`` learned to reuse the block the first stage frees, see
+#: ROADMAP.md section 3).  Every later stage is far smaller (<= 672 B), because
+#: the time axis is already short.
 #:
 #: Measured certificate for this layout (734-sample test split, split seed 1337,
-#: from ``python -m examples.kws.evaluate``): 38,173 parameters (~38.6K, the MLPerf
-#: DS-CNN footprint), 39,197 B ROM, 1,972 B arena, 310,382 MACs and 89.10% int8
-#: C top-1 accuracy (validation 91.27% FP32 / 91.00% C99).  Four training runs of
-#: the shipped recipe span 88.69-90.05% FP32 test accuracy (two of them measured
-#: 89.10% and 90.05% through the emitted C), i.e. within the +/-2.2 point
-#: confidence interval of a 734-clip test set; the shipped checkpoint is the
-#: highest-validation run (see ROADMAP.md Phase 1, findings 4 and 5).
+#: from ``python -m examples.kws.evaluate``): 38,590 parameters (~38.6K, the MLPerf
+#: DS-CNN footprint), 39,614 B ROM, 1,992 B arena, 314,342 MACs and 91.01% int8
+#: C top-1 accuracy (668/734; validation 91.54% FP32 / 91.68% C99).  That is the
+#: best layout measured on this corpus, and the checkpoint is the
+#: highest-validation run of the 300-epoch recipe (seed 777); it used to be over
+#: budget at 3,316 B, which is why the first certificate shipped the narrower
+#: 27/55 layout (89.10% int8 C, 1,972 B) -- kept as the ``previous`` preset with
+#: its checkpoint in ``examples/kws/kws_qat_weights_27_55.pt``.
 KWS_ARCHITECTURE: tuple[tuple[int, int, int, int], ...] = (
     (27, 5, 2, 2),
-    (55, 3, 1, 4),
+    (56, 3, 1, 4),
     (112, 3, 1, 3),
     (112, 1, 0, 2),
     (12, 1, 0, 0),

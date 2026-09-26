@@ -86,9 +86,17 @@ AUGMENTATION: dict[str, int] = {
 #: planner this file was first measured with needed ``c1 * L0 <= c0 * 49``
 #: instead, which capped ``c1`` at 55 for ``c0 = 27``.
 ARCHITECTURES: dict[str, tuple[tuple[int, int, int, int], ...]] = {
-    # 1,972 B arena / 39,197 B ROM / 88.69-90.05% FP32 test over four runs
-    # (shipped checkpoint: 89.10% int8 C, 91.27% val FP32).
+    # The certificate layout (ROADMAP.md section 1): 1,992 B arena / 39,614 B ROM
+    # / 91.01% int8 C test (90.74% FP32, val 91.54% FP32 / 91.68% C99).  The best
+    # layout measured on this corpus, and inside both budgets because
+    # ``kiln.ir.arena`` reuses the first stage's freed 1,324 B block; the
+    # First-Fit-only planner this file was first measured with needed 3,316 B.
     "shipped": KWS_ARCHITECTURE,
+    # The previous shipped layout (27/55), kept as the certificate-v1 artifact:
+    # 1,972 B arena / 39,197 B ROM / 89.10% int8 C test (88.69% FP32, val 91.27%
+    # FP32 / 91.00% C99).  `python -m examples.kws.qat_eval --architecture
+    # previous --weights examples/kws/kws_qat_weights_27_55.pt` reprints it.
+    "previous": ((27, 5, 2, 2), (55, 3, 1, 4), (112, 3, 1, 3), (112, 1, 0, 2), (12, 1, 0, 0)),
     # Original Phase 1a baseline: 2,336 B arena (over budget), 90.87% test.
     "small": ((32, 3, 1, 2), (48, 3, 1, 24), (12, 1, 0, 0)),
     # 16 pooled frames: 2,016 B arena, 88.69-89.65% test.
@@ -97,13 +105,6 @@ ARCHITECTURES: dict[str, tuple[tuple[int, int, int, int], ...]] = {
     "pool4": ((33, 5, 2, 4), (128, 3, 1, 4), (128, 1, 0, 3), (12, 1, 0, 0)),
     # 9 pooled frames: 2,032 B arena, 89.24% test (300 ep; 89.65% at 120 ep).
     "pool5": ((35, 5, 2, 5), (128, 3, 1, 3), (128, 1, 0, 3), (12, 1, 0, 0)),
-    # The best accuracy measured on this corpus: a 56-channel second stage with
-    # 24 pooled frames (val 91.54 / test 90.74 FP32, 91.68 / 91.01 through the
-    # emitted C, seed 777).  The First-Fit-only planner needed 3,316 B for it
-    # (56 * 24 = 1,344 B no longer fits the 1,323 B block the first stage frees),
-    # which is why it was kept as an over-budget control; ``kiln.ir.arena`` packs
-    # it into 1,992 B = its own live peak, so it is compliant again (ROADMAP §3).
-    "narrow_second": ((27, 5, 2, 2), (56, 3, 1, 4), (112, 3, 1, 3), (112, 1, 0, 2), (12, 1, 0, 0)),
     # The unconstrained layout: 24 pooled frames with a 64-channel second stage.
     # ``c0 + c1 = 90 > 85``, so the second convolution (64 * 24 = 1,536 B) still
     # does not fit next to the 624 B pooled tensor: 2,160 B with the improved

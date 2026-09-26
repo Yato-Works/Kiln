@@ -60,12 +60,12 @@ returns the same certificate as structured data.
 
 | Metric | Value | Contract |
 | :--- | :--- | :--- |
-| int8 C99 test accuracy | **89.10 %** (734 held-out clips) | >= 85 % (asserted) |
-| FP32 test accuracy | 88.69 % | — |
-| Quantisation delta | +0.41 % | no accuracy loss |
-| Emitted C vs FP32 predictions | 99.18 % agreement | >= 95 % (asserted) |
-| Arena RAM / total ROM | **1,972 B** / 39,197 B | < 2 KB / < 40 KB (asserted) |
-| Raw PCM → label (C frontend + emitted graph) | 24/24 bit-exact vs reference, 23/24 correct | spans all 12 classes |
+| int8 C99 test accuracy | **91.01 %** (734 held-out clips) | >= 85 % (asserted) |
+| FP32 test accuracy | 90.74 % | — |
+| Quantisation delta | +0.27 % | no accuracy loss |
+| Emitted C vs FP32 predictions | 98.50 % agreement | >= 95 % (asserted) |
+| Arena RAM / total ROM | **1,992 B** / 39,614 B | < 2 KB / < 40 KB (asserted) |
+| Raw PCM → label (C frontend + emitted graph) | 24/24 bit-exact vs reference, 23/24 correct, 24/24 identical to the PyTorch pipeline | spans all 12 classes |
 
 Two caveats, both documented in `ROADMAP.md`:
 
@@ -73,15 +73,15 @@ Two caveats, both documented in `ROADMAP.md`:
   not bit-stable, so re-running `train_aug` lands within ~1 point of the shipped checkpoint
   (selection therefore uses the validation split, never the test split);
 * 92.2 % (the MLPerf reference) is not reached because the Phase 1 corpus is 4,890 clips
-  instead of ~105 K; training accuracy saturates at 99.85 % while validation plateaus near 91 %.
+  instead of ~105 K; training accuracy saturates at 99.85 % while validation plateaus near 91.5 %.
 
 ## Datasets and artifacts
 
 | Path | Size | Tracked | Notes |
 | :--- | :--- | :---: | :--- |
 | `examples/kws/kws_processed_data.pt` | 9.2 MB | yes | frozen 4,890-clip log-mel corpus + split — the certificate input |
-| `examples/kws/kws_qat_weights.pt` | 0.1 MB | yes | the shipped int8 checkpoint |
-| `examples/kws/kws_narrow_second_weights.pt` | 0.1 MB | yes | the 27/56 `narrow_second` checkpoint (seed 777); `python -m examples.kws.qat_eval --architecture narrow_second --weights examples/kws/kws_narrow_second_weights.pt` reprints its 91.01 % C99 / 90.74 % FP32 accuracy and its 1,992 B arena (`ROADMAP.md` §3) |
+| `examples/kws/kws_qat_weights.pt` | 0.1 MB | yes | the shipped int8 checkpoint (27/56 layout, seed 777) |
+| `examples/kws/kws_qat_weights_27_55.pt` | 0.1 MB | yes | the previous 27/55 checkpoint; `python -m examples.kws.qat_eval --architecture previous --weights examples/kws/kws_qat_weights_27_55.pt` reprints the v1 certificate (89.10 % int8 C, 1,972 B arena) |
 | `examples/kws/kws_trained_weights.pt` | 0.1 MB | yes | dB-domain checkpoint written by `examples/kws/train.py` and consumed by `ptq_test.py` (`ROADMAP.md` §4, finding 3) |
 | `speech_commands_test_set_v0.02.tar.gz` | 107 MB | no | raw WAVs for the end-to-end audio tests; without it those tests report `skipped` |
 
