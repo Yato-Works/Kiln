@@ -1,0 +1,9 @@
+# Normalize text to LF in the repository, check out per platform.
+* text=auto
+
+# Binary artifacts must never be line-ending converted.
+*.pt binary
+*.ptc binary
+*.tar.gz binary
+*.wav binary
+*.png binary

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    # The interesting tests compile the emitted C with gcc and compare it against
+    # an independent Python reference, so a C99 toolchain is required (the
+    # ubuntu runner image ships one).  Windows/macOS runners would mostly skip.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install CPU-only PyTorch
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Kiln
+        run: python -m pip install -e ".[test]"
+
+      - name: CLI smoke test
+        run: |
+          python -m kiln ops
+          python -m kiln --help
+
+      - name: Phase 1 certificate (emits C, builds it with gcc, scores it)
+        run: python -m examples.kws.evaluate
+
+      - name: Test suite
+        # The 107 MB Speech Commands archive is not vendored, so the tests that
+        # need raw WAVs report as skipped; everything else (including the KWS
+        # accuracy/budget cheque, which only needs the tracked precomputed
+        # corpus and checkpoint) must pass.
+        run: python -m pytest tests/ -q -rs

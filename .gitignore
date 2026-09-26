@@ -1,0 +1,38 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+.venv/
+venv/
+env/
+
+# --- Test / type-checker caches ---
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# --- Editors ---
+.vscode/
+.idea/
+
+# --- Compiled scratch objects ---
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.exe
+/out/
+/kiln_out/
+
+# --- Data that is downloaded, not vendored ---
+# The 107 MB Speech Commands v0.02 test-set archive lives next to the repo
+# clone; see README.md "Datasets".  (The 9.2 MB precomputed corpus and the
+# 0.1 MB shipped checkpoints under examples/kws/ ARE tracked on purpose: they
+# are the frozen Phase 1 certificate inputs.)
+speech_commands_test_set_v0.02.tar.gz
+*.tar.gz
