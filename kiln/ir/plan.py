@@ -1,14 +1,34 @@
+"""Live ranges and arena planning for one Kiln graph.
+
+
+
+``calculate_liveness`` turns a scheduled graph into per-tensor live intervals;
+
+``allocate_arena`` turns those intervals plus the tensor sizes into the arena
+
+offsets the emitted C indexes.  Placement itself lives in ``kiln.ir.arena``
+
+(historical First-Fit baseline plus a best-fit search that can only shrink the
+
+arena), and ``kiln.ir.memory`` layers the two graph-wide reductions -- in-place
+
+``LUT`` fusion and zero-copy graph inputs -- on top of it.
+
+"""
+
+
 from __future__ import annotations
 
 
 
-from bisect import insort
 
 from dataclasses import dataclass
 
 from types import MappingProxyType
 
-from typing import Final, Iterable, Mapping, NamedTuple, Sequence
+from typing import Final, Mapping, NamedTuple, Sequence
+from . import arena
+
 
 
 
@@ -81,28 +101,10 @@ class MemoryPlan:
     offsets: Mapping[str, int]
 
     peak_concurrent_bytes: int
+    #: Allocator strategy that produced ``offsets`` (see ``kiln.ir.arena``).
 
+    strategy: str = "insertion-order/first-fit"
 
-
-
-
-class _Block(NamedTuple):
-
-    offset: int
-
-    size: int
-
-    last_op: int
-
-    name: str
-
-
-
-    @property
-
-    def end(self) -> int:
-
-        return self.offset + self.size
 
 
 
@@ -166,28 +168,6 @@ def calculate_liveness(
 def _align_up(value: int, alignment: int) -> int:
 
     return -(-value // alignment) * alignment
-
-
-
-
-
-def _first_fit_offset(size: int, live: Iterable[_Block]) -> int:
-
-    offset = 0
-
-
-
-    for block in live:
-
-        if offset + size <= block.offset:
-
-            return offset
-
-        offset = max(offset, block.end)
-
-
-
-    return offset
 
 
 
@@ -397,7 +377,9 @@ def allocate_arena(
 
 ) -> MemoryPlan:
 
-    """Places every tensor inside one arena with a First-Fit allocator.
+    """Places every tensor inside one arena.
+
+
 
     ``aliases`` maps an output tensor to an input tensor whose bytes it may
 
@@ -407,7 +389,20 @@ def allocate_arena(
 
     union of their lifetimes, so an in-place ``LUT`` costs zero extra RAM.
 
-    ``aliases=None`` reproduces the unaliased First-Fit layout exactly.
+    ``aliases=None`` reproduces the unaliased layout exactly.
+
+
+
+    The offsets come from ``kiln.ir.arena.place``: the historical First-Fit
+
+    layout is returned unless a size-descending / best-fit strategy strictly
+
+    shrinks the arena, so this call can only ever match or beat the layout the
+
+    Phase 1 certificate was taken from.  ``MemoryPlan.strategy`` names the
+
+    winning layout.
+
     """
 
     if alignment <= 0:
@@ -424,14 +419,6 @@ def allocate_arena(
 
 
 
-    offsets: dict[str, int] = {}
-
-    live: list[_Block] = []
-
-    arena_bytes = 0
-
-    peak_live_bytes = 0
-
     root_of = _resolve_aliases(aliases, lifetimes)
 
     requests = _group_requests(
@@ -444,43 +431,21 @@ def allocate_arena(
 
 
 
-    for name, lifetime, size in requests:
+    layout = arena.place(
 
-        live = [
+        [
 
-            block
+            (name, (lifetime.first_op, lifetime.last_op), size)
 
-            for block in live
-
-            if block.last_op >= lifetime.first_op
+            for name, lifetime, size in requests
 
         ]
 
-
-
-        offset = _first_fit_offset(size, live)
-
-        block = _Block(offset, size, lifetime.last_op, name)
+    )
 
 
 
-        offsets[name] = offset
-
-        insort(live, block)
-
-
-
-        arena_bytes = max(arena_bytes, block.end)
-
-        peak_live_bytes = max(
-
-            peak_live_bytes,
-
-            sum(block.size for block in live),
-
-        )
-
-
+    offsets = dict(layout.offsets)
 
     for member, root in root_of.items():
 
@@ -490,10 +455,12 @@ def allocate_arena(
 
     return MemoryPlan(
 
-        total_arena_bytes=arena_bytes,
+        total_arena_bytes=layout.arena_bytes,
 
         offsets=MappingProxyType(offsets),
 
-        peak_concurrent_bytes=peak_live_bytes,
+        peak_concurrent_bytes=layout.peak_concurrent_bytes,
+
+        strategy=layout.strategy,
 
     )

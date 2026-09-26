@@ -74,14 +74,17 @@ AUGMENTATION: dict[str, int] = {
 #: every entry was trained on the frozen split, and the arena size is the one
 #: ``kiln.budget.report.audit_graph`` reports for the emitted C.
 #:
-#: RAM sizing rule of thumb (``kiln.ir.memory`` + ``First-Fit``): a fused
+#: RAM sizing rule of thumb (``kiln.ir.memory`` + ``kiln.ir.arena``): a fused
 #: ``CONV1D -> LUT`` stage keeps its output and its pooled output alive at the
 #: same time, and the pooled tensor is still live while the *next* convolution
 #: writes its output.  For a first stage with ``c0`` channels and ``L0`` pooled
-#: frames that means the arena needs at least
-#: ``max(c0 * (49 + L0), L0 * (c0 + c1))`` bytes -- and, because First-Fit only
-#: recycles the *freed* block of the previous convolution, another
-#: ``c1 * L0`` bytes on top unless ``c1 * L0 <= c0 * 49``.
+#: frames the arena therefore has to hold
+#: ``max(c0 * (49 + L0), L0 * (c0 + c1))`` bytes, and the allocator reaches that
+#: bound because everything else is packed into gaps left by dead tensors.  With
+#: 24 pooled frames that is ``73 * c0 <= 2048`` and ``24 * (c0 + c1) <= 2048``
+#: before alignment, i.e. ``c0 <= 28`` and ``c0 + c1 <= 85`` -- the First-Fit
+#: planner this file was first measured with needed ``c1 * L0 <= c0 * 49``
+#: instead, which capped ``c1`` at 55 for ``c0 = 27``.
 ARCHITECTURES: dict[str, tuple[tuple[int, int, int, int], ...]] = {
     # 1,972 B arena / 39,197 B ROM / 88.69-90.05% FP32 test over four runs
     # (shipped checkpoint: 89.10% int8 C, 91.27% val FP32).
@@ -94,15 +97,17 @@ ARCHITECTURES: dict[str, tuple[tuple[int, int, int, int], ...]] = {
     "pool4": ((33, 5, 2, 4), (128, 3, 1, 4), (128, 1, 0, 3), (12, 1, 0, 0)),
     # 9 pooled frames: 2,032 B arena, 89.24% test (300 ep; 89.65% at 120 ep).
     "pool5": ((35, 5, 2, 5), (128, 3, 1, 3), (128, 1, 0, 3), (12, 1, 0, 0)),
-    # The direct twin of ``shipped`` with a 56-channel second stage: 3,316 B arena
-    # (over budget -- 56 * 24 = 1,344 B no longer fits the first stage's recycled
-    # 1,323 B block) for the best accuracy measured on this corpus
-    # (val 91.54 / test 90.74, seed 777).  Kept to show what the 2 KB limit costs.
+    # The best accuracy measured on this corpus: a 56-channel second stage with
+    # 24 pooled frames (val 91.54 / test 90.74 FP32, 91.68 / 91.01 through the
+    # emitted C, seed 777).  The First-Fit-only planner needed 3,316 B for it
+    # (56 * 24 = 1,344 B no longer fits the 1,323 B block the first stage frees),
+    # which is why it was kept as an over-budget control; ``kiln.ir.arena`` packs
+    # it into 1,992 B = its own live peak, so it is compliant again (ROADMAP §3).
     "narrow_second": ((27, 5, 2, 2), (56, 3, 1, 4), (112, 3, 1, 3), (112, 1, 0, 2), (12, 1, 0, 0)),
     # The unconstrained layout: 24 pooled frames with a 64-channel second stage.
-    # 3,436 B arena, i.e. the second convolution (64 * 24 = 1,536 B) no longer
-    # fits in the first one's freed 1,274 B block.  Best accuracy measured
-    # (90.60% test), which is what the First-Fit reuse cliff costs us.
+    # ``c0 + c1 = 90 > 85``, so the second convolution (64 * 24 = 1,536 B) still
+    # does not fit next to the 624 B pooled tensor: 2,160 B with the improved
+    # allocator (3,436 B with First-Fit).  Best accuracy measured (90.60% test).
     "wide_second": ((26, 5, 2, 2), (64, 3, 1, 4), (96, 3, 1, 3), (128, 1, 0, 2), (12, 1, 0, 0)),
 }
 

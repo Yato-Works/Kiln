@@ -71,7 +71,9 @@ def plan_graph_memory(
 ) -> MemoryPlan:
     """Plans the arena exactly as ``emit_c`` lays it out.
 
-    Two backend-wide reductions are applied on top of the First-Fit allocator:
+    Two backend-wide reductions are applied before placement, which itself is
+    delegated to ``kiln.ir.arena`` (First-Fit baseline plus a best-fit search
+    that can only shrink the arena):
 
     * elementwise ``LUT`` outputs reuse their input buffer (``aliases``),
     * graph inputs are read in place from the caller's ``input_bytes`` buffer

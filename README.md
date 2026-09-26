@@ -81,6 +81,7 @@ Two caveats, both documented in `ROADMAP.md`:
 | :--- | :--- | :---: | :--- |
 | `examples/kws/kws_processed_data.pt` | 9.2 MB | yes | frozen 4,890-clip log-mel corpus + split — the certificate input |
 | `examples/kws/kws_qat_weights.pt` | 0.1 MB | yes | the shipped int8 checkpoint |
+| `examples/kws/kws_narrow_second_weights.pt` | 0.1 MB | yes | the 27/56 `narrow_second` checkpoint (seed 777); `python -m examples.kws.qat_eval --architecture narrow_second --weights examples/kws/kws_narrow_second_weights.pt` reprints its 91.01 % C99 / 90.74 % FP32 accuracy and its 1,992 B arena (`ROADMAP.md` §3) |
 | `examples/kws/kws_trained_weights.pt` | 0.1 MB | yes | dB-domain checkpoint written by `examples/kws/train.py` and consumed by `ptq_test.py` (`ROADMAP.md` §4, finding 3) |
 | `speech_commands_test_set_v0.02.tar.gz` | 107 MB | no | raw WAVs for the end-to-end audio tests; without it those tests report `skipped` |
 
@@ -90,10 +91,10 @@ next to the repository root; it is never vendored.
 ## Repository layout
 
 ```
-kiln/ir/         KIR: ops, dtypes, quantisation params, validation, tie-break rules
+kiln/ir/         KIR: ops, dtypes, quantisation params, validation, best-fit arena allocator
 kiln/frontend/   PyTorch -> KIR lowering
 kiln/budget/     static arena/ROM/MAC audit and certificate formatting
-kiln/backend/    C99 emitter (in-place LIFO arena, zero-malloc)
+kiln/backend/    C99 emitter (one static arena, zero-malloc)
 kiln/ref/        independent integer reference interpreter (the oracle)
 kiln/cli.py      `compile`, `audit`, `verify`, `ops`
 examples/kws/    Phase 1: model, training recipes, evaluation, fixed-point C frontend
@@ -104,6 +105,10 @@ tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM�
 
 * Guaranteed: identical C output for identical inputs, zero dynamic allocation,
   bit-exact agreement between the emitted C and `kiln.ref`, and a static footprint bound.
+  Placement is interval-aware (`kiln/ir/arena.py`): the allocator keeps the historical
+  First-Fit layout unless a best-fit search *strictly* shrinks the arena, so re-emitting
+  an existing model cannot move its offsets and a 20 B gap shortfall no longer costs a
+  whole 1.3 KB block (`ROADMAP.md` §3).
 * Not guaranteed (yet): execution on real silicon (the latency figure is an upper-bound
   cycle estimate, see Phase 4), and bit-identical *training* runs.
 

@@ -37,20 +37,20 @@ SCALE_DB: float = 40.0 / 127.0
 #: and is only legal on the head (a non-final stage must pool, otherwise the
 #: next stage would pool with a stale stage index).
 #:
-#: Sizing rules (Phase 1a budget: ROM < 40 KB, RAM < 2 KB).  With
-#: ``First-Fit`` placement (``kiln.ir.plan.allocate_arena``) + in-place LUT
-#: fusion + zero-copy graph inputs, a stage whose convolution output is
-#: ``c_out x L_out`` bytes costs:
+#: Sizing rules (Phase 1a budget: ROM < 40 KB, RAM < 2 KB).  With the planner's
+#: in-place LUT fusion + zero-copy graph inputs + ``kiln.ir.arena`` placement, a
+#: stage whose convolution output is ``c_out x L_out`` bytes costs:
 #:
 #:   * ``c_out * L_out`` bytes in the first stage (the 10 x 49 input lives in
 #:     the caller's buffer, so it is free), and
 #:   * the pooled tensor stays live while the *next* convolution writes its own
 #:     output, so the arena peak is the largest of
 #:     ``c_out * (frames_in + frames_pooled)`` and
-#:     ``frames_pooled * (c_out + c_next)`` (the two-way pair), and
-#:   * the next convolution only reuses the freed block when
-#:     ``frames_pooled * c_next <= c_out * frames_in``; otherwise it is placed
-#:     after the live pooled tensor and the arena grows by that whole block.
+#:     ``frames_pooled * (c_out + c_next)`` -- the two sets of tensors that are
+#:     live at the same op, and
+#:   * everything else is packed into the gaps left by dead tensors, so the
+#:     arena stays at that peak instead of growing by whole blocks: the
+#:     allocator, not the weights, decides which tensor reuses which gap.
 #:
 #: With ``(27, 5, 2, 2)`` the first stage costs 27 * 73 = 1,971 B and the second
 #: convolution needs 55 * 24 = 1,320 B <= 27 * 49 = 1,323 B, so it lands inside

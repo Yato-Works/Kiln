@@ -72,14 +72,20 @@ re-selecting on test accuracy would be test-set leakage (finding 5 below).
 
 ### 2. Where the sub-2 KB file comes from
 
-`kiln.ir.memory` applies two backend-wide reductions on top of the First-Fit
-allocator (`kiln.ir.plan.allocate_arena`), both verified in `tests/test_inplace.py`:
+`kiln.ir.memory` applies two backend-wide reductions, and `kiln.ir.arena` places
+the resulting blocks; both are verified in `tests/test_inplace.py` and
+`tests/test_arena.py`:
 
 | Arena plan | Bytes |
 | :--- | ---: |
 | First-Fit over every tensor, graph input copied into the arena | 3,288 |
 | + in-place `LUT` fusion (4 aliases: `t_relu0..3 -> t_conv0..3`) | 2,464 |
 | + zero-copy graph inputs (`const uint8_t *input_bytes`) | **1,972** |
+
+1,972 B is that graph's floor rather than a First-Fit artefact: the first stage's
+1,324 B output block is still live while its 648 B pooled tensor is written
+(live peak 1,972 B), so no placement can beat it, and the allocator rewrite in
+section 6 finding 2 leaves the shipped layout byte-identical.
 
 That is **-1,316 B (-40%)** without changing the arithmetic: the emitted C is
 still bit-exact against `kiln.ref.run_ref` (25/25 samples in `tests/test_kws.py`,
@@ -93,30 +99,41 @@ held-out clips (the emitted-C figure for the shipped row is section 1's 89.10%).
 
 | Preset | Pooled frames | Params | Arena | ROM | Test accuracy (seeds) |
 | :--- | ---: | ---: | ---: | ---: | :--- |
-| `wide_second` (26/64), 120 ep | 24 | 38,548 | 3,436 B | 39,572 B | 88.42 / 88.01 |
-| `wide_second`, 300 ep | 24 | 38,548 | 3,436 B | 39,572 B | **90.60** |
-| `narrow_second` (27/56), 300 ep | 24 | 38,590 | 3,316 B | 39,614 B | **90.74** / 89.92 |
+| `wide_second` (26/64), 120 ep | 24 | 38,548 | 2,160 B | 39,572 B | 88.42 / 88.01 |
+| `wide_second`, 300 ep | 24 | 38,548 | 2,160 B | 39,572 B | **90.60** |
+| `narrow_second` (27/56), 300 ep | 24 | 38,590 | **1,992 B** | 39,614 B | **90.74** / 89.92 |
 | `shipped` (27/55), 300 ep | 24 | 38,173 | **1,972 B** | 39,197 B | 90.05 / 89.78 / 89.51 / 88.69 |
 | `stage3` (31/64), 300 ep | 16 | 36,302 | 2,016 B | 37,326 B | 89.65 / 88.69 |
 | `pool5` (35/128), 300 ep | 9 | 33,110 | 2,032 B | 33,878 B | 89.24 |
 | `pool4` (33/128), 120 ep | 12 | 32,242 | 2,016 B | 33,010 B | 87.74 |
 | `small` (32/48), 120 ep | 24 | 6,144 | 2,336 B | 6,656 B | 90.87 |
 
-The arena is bounded by **two** pair terms, not one: while a stage's pooled
+The arena column is re-audited with `kiln.ir.arena` (section 6 finding 2);
+only `narrow_second` and `wide_second` move (3,316 -> 1,992 B and
+3,436 -> 2,160 B), everything else was already at its live peak.
+
+The arena is bounded by **two** live-peak terms, not one: while a stage's pooled
 tensor is still live the next convolution writes its own output, so a first
 stage with `c0` channels, `L0` pooled frames and a `c1`-channel successor needs
-`max(c0 * (49 + L0), L0 * (c0 + c1))` bytes; and because First-Fit only recycles
-the block freed by the *previous* convolution, another `c1 * L0` bytes are added
-unless `c1 * L0 <= c0 * 49`.  This is what caps the first stage at ~28 channels
-when 24 frames are kept, and it produces a steep cliff: `c1 = 56` costs 3,316 B
-while `c1 = 55` costs 1,972 B, i.e. 21 bytes of channel width for 1,344 B of RAM.
-The over-budget twin is kept as the `narrow_second` preset because it isolates
-what the budget costs: at 3,316 B it reaches val 91.54 / test 90.74 (the best
-measured on this corpus) versus the shipped layout's val 91.27 / test 88.69, so
-staying inside 2 KB appears to be worth a few tenths of a validation point —
-inside this corpus's selection noise, but directionally consistent with
-`wide_second` at 3,436 B.  A better allocator (gap 2) would buy it back without
-touching the weights.
+`max(c0 * (49 + L0), L0 * (c0 + c1))` bytes.  `kiln.ir.arena` reaches that bound
+for every layout in the table above, so the budget reduces to two linear
+constraints: with 24 pooled frames, `73 * c0 <= 2048` and
+`24 * (c0 + c1) <= 2048` before alignment, i.e. `c0 <= 28` and `c0 + c1 <= 85`
+(sweep: 27/58 -> 2,040 B, 28/57 -> 2,044 B, 27/59 -> 2,064 B is over).  The old
+First-Fit-only planner needed the harsher `c1 * L0 <= c0 * 49` instead, which
+capped a 27-channel first stage at 55 channels: `c1 = 56` needs 1,344 B for a
+1,324 B freed block, so First-Fit appended the whole block after the live pooled
+tensor and the arena jumped from 1,972 B to 3,316 B -- 1,344 B of RAM for a 20 B
+shortfall.  That cliff is what forced the best layout measured on this corpus
+(`narrow_second`: val 91.54 / test 90.74 FP32, 91.68 / 91.01 through the emitted
+C, seed 777) over budget; the interval-aware allocator packs it into 1,992 B,
+exactly its own live peak, and raises the compliant ceiling to `c1 <= 58` at
+`c0 = 27` (2,040 B) or `c1 <= 57` at `c0 = 28` (2,044 B).  Whether the
+certificate should therefore ship `narrow_second` instead of the 27/55 layout is
+a separate decision -- section 6 finding 2 records the allocator change itself.
+Both layouts stay reproducible:
+`python -m examples.kws.qat_eval --architecture narrow_second --weights examples/kws/kws_narrow_second_weights.pt`
+reprints 91.01% (C99) / 90.74% (FP32) on the frozen split.
 
 ### 4. Findings that shaped the shipped recipe
 
@@ -184,9 +201,17 @@ class, taken across the archive):
    over-budget twins in section 3), so it is not the binding constraint either.
    Acquiring the full corpus is the cheapest next gain (the frontend pipeline is
    already in place for it).
-2. **First-Fit leaves memory on the table.** A size-descending / best-fit or
-   optimal interval-colouring pass would recover the reuse cliff described in
-   section 3 and widen the search space (Phase 3 territory).
+2. **First-Fit left memory on the table -- fixed.** Placement now lives in
+   `kiln.ir.arena`: it evaluates the historical First-Fit insertion layout plus
+   size-descending first-fit/best-fit candidates and keeps the smallest, so it
+   can only ever shrink the arena and never changes a layout that was already
+   minimal.  Measured on section 3's presets: shipped 1,972 B (unchanged, it is
+   the live peak), `narrow_second` 3,316 -> **1,992 B** (compliant again),
+   `wide_second` 3,436 -> 2,160 B (still over: its live peak is 2,160 B).  The
+   compliant search space therefore grows from `c1 <= 55` to `c1 <= 58` at
+   `c0 = 27`; re-searching architectures inside the wider bound, and deciding
+   which checkpoint the certificate ships, are Phase 3 items.
+
 3. `MATMUL` is part of the op set but unused by the shipped graph; Phase 2
    (fastText-shaped distillation) is the natural place to exercise it.
 
@@ -244,7 +269,7 @@ which is what makes it a *generality* proof rather than a second benchmark.
 | **G1 Feature contract first** | Freeze the exact integer tokenizer/feature contract *before* any training run; the C runtime sees `uint8` tokens and int8 features, never floats or dB | §4 finding 3 — dB-domain training scored 50.54 % through the emitted C |
 | **G2 Frozen corpus** | The synthesized dataset is a checked-in artifact with a manifest (teacher model + version, prompt hash, decoding params, seed, corpus hash). No live API calls inside tests or pipelines | the frozen split seed (1337) and the tracked 9.2 MB corpus |
 | **G3 Real held-out set** | "Synthetic data works" is only meaningful against *real, never-synthesized* code, and against a naive baseline (regex/allow-list) and fastText | §3's `narrow_second` twin: accuracy claims need a control |
-| **G4 Equal-budget showdown** | fastText is compared at the *same* footprint (<= 2 KB arena / <= 40 KB ROM), not at equal accuracy | the First-Fit cliff in §3 |
+| **G4 Equal-budget showdown** | fastText is compared at the *same* footprint (<= 2 KB arena / <= 40 KB ROM), not at equal accuracy | §3's arena cliff (closed by `kiln.ir.arena`) |
 | **G5 Selection by validation** | Test accuracy is reported, never used to pick a checkpoint; report confidence intervals | §4 finding 4 — 734 clips is +/-2.2 points |
 
 ### Milestones
