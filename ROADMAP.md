@@ -257,7 +257,9 @@ Phase 1 was developed without version control; the tree is now a git repository
 
 ## Phase 2 Detail (DRAFT): Synthetic-Data Distillation Pipeline
 
-**Status**: M2.0 **done** (feature contract frozen, see below); M2.1+ not started.
+**Status**: M2.0-M2.4 **done** (feature contract, frozen corpus, int8 student,
+showdown, C tokenizer — see the Phase 2 Close-Out at the end of this section);
+M2.5 experiment open.
 Phase 1 proved the *back half* of the framework on a
 public dataset with no LLM in the loop; Phase 2 has to prove the *front half* — the half
 that motivated Kiln in the first place.  The tasks Kiln is meant to serve (detecting a
@@ -350,9 +352,9 @@ is therefore a question about the window, not about the model size.
 | # | Deliverable | Acceptance test |
 | :---: | :--- | :--- |
 | M2.0 | Feature-contract spec (tokenizer, vocabulary size, int8 packing, unknown-token policy) | **DONE**: `examples/hazard/tokenizer.py` + the contract table below + `tests/test_hazard_tokenizer.py` (54 checks, including text -> emitted-C parity); the `MAXPOOL1D(axis=0)` prerequisite is done as well |
-| M2.1 | Meta-prompt generator + synthesis harness producing the frozen corpus | manifest hash reproduces the corpus bit-exactly |
-| M2.2 | int8 student (`EMBEDDING` + `MATMUL` + `MAXPOOL1D(axis=0)` + `ARGMAX`) trained by distillation, lowered to Kiln IR | arena/ROM audited (table above); `MATMUL` and `EMBEDDING` leave the "unexercised" list |
-| M2.3 | Showdown report: Kiln student vs fastText vs rules baseline, with CIs | numbers in this section, reproducible by one command |
+| M2.1 | Meta-prompt generator + synthesis harness producing the frozen corpus | **DONE**: `examples/hazard/synthesize.py` + `manifest.json` (corpus 300 + real held-out 60, seed 1337); `tests/test_hazard_dataset.py` verifies the digests and the zero-leakage gate |
+| M2.2 | int8 student (`EMBEDDING` + `MATMUL` + `MAXPOOL1D(axis=0)` + `ARGMAX`) trained by distillation, lowered to Kiln IR | **DONE**: `examples/hazard/train.py`; arena **1,344 B** / ROM **2,096 B** audited on trained weights (budget table above); bit-exact PyTorch int <-> `kiln.ref` <-> emitted C on all 360 samples (`tests/test_hazard_model.py`); `MATMUL` and `EMBEDDING` leave the "unexercised" list |
+| M2.3 | Showdown report: Kiln student vs fastText vs rules baseline, with CIs | **DONE**: showdown table in the Phase 2 Close-Out section below, reproduced by `python -m examples.hazard.benchmark` |
 | M2.4 | Raw source text -> fixed-point tokenizer -> emitted graph, all C | **DONE**: `examples/hazard/frontend/hazard_tokenizer.c/h`, checked by `tests/test_hazard_frontend.py` (`-std=c99 -O3 -Wall -Wextra -Werror -pedantic`) |
 | M2.5 | Differential-fuzzing distillation loop (unlabeled code as a fuzzing oracle) | documented as an experiment, success or failure |
 
@@ -376,5 +378,62 @@ is therefore a question about the window, not about the model size.
    `tokens * (dim + labels)`, so the current cap allows a 96-token window at `dim` 8 / 6
    labels (1,344 B) or 192 tokens at `dim` 4 (1,920 B), while a 256-token, 12-label model
    needs 4,096 B -- keeping 2 KB decides the snippet window, not the model size.
+
+## Phase 2 Close-Out (2026-09-26)
+
+**Status**: M2.0-M2.4 DONE, M2.5 open (documented-as-an-experiment).  The
+teacher record, the leakage gate and the corpus digests are in
+`examples/hazard/manifest.json`.
+
+### 1. M2.2 certificate: the int8 student
+
+Reproduce with `python -m examples.hazard.train` (seed 1337: 180 smooth-max
+annealed float epochs, then 40 QAT epochs through the exact integer pipeline;
+`examples/hazard/hazard_int8_weights.json` is the shipped artifact) and check
+with `python -m pytest tests/test_hazard_model.py`.  The label requantisation
+scale is calibrated from the integer accumulators over train+val
+(127 / 37,772 = 0.00336228) and lives in `examples/hazard/graph.py` as
+`_LABEL_SCALE`, so a plain `build_bag_graph()` ships the calibrated graph.
+
+| Metric | Target | Measured |
+| :--- | :--- | :--- |
+| Arena RAM (`.bss`, zero-malloc) | < 2,048 B | **1,344 B** |
+| Constant ROM (int8 weights) | < 40,960 B | **2,096 B** (256 x 8 embedding + 6 x 8 head) |
+| MACs per inference | — | **4,608** |
+| int8 top-1, frozen test (n=45) | — | **73.3%** [59.0, 84.0] |
+| int8 top-1, real held-out (n=60) | — | **73.3%** [61.0, 82.9] |
+| float vs int agreement (test) | — | **100%**, 0.00% saturating logits |
+| PyTorch int <-> `kiln.ref` <-> emitted C | bit-exact | **360/360 samples** (gcc) |
+
+The float stage is a `BagClassifier` trained with a smooth-max (logsumexp)
+surrogate whose tau anneals 1.0 -> 0.08, always evaluated with the hard
+max-pool the graph deploys; QAT then fine-tunes through an int64 port of
+`kiln.ir.sem.requantize` with straight-through gradients.  Checkpoints are
+selected on validation accuracy only (G5).  `tests/test_hazard_model.py`
+(10 tests) pins the artifact contract, the budget, the frozen split and a
+differential check of the requantise port against `kiln.ir.sem.requantize`
+over boundary accumulators.
+
+### 2. M2.3 showdown (Wilson 95% CIs; one command: `python -m examples.hazard.benchmark`)
+
+| Model | Footprint | Frozen test (n=45) | Real held-out (n=60) |
+| :--- | :--- | :--- | :--- |
+| Kiln int8 student (emitted C) | ROM 2,096 B; arena 1,344 B | 73.3% [59.0, 84.0] | **73.3%** [61.0, 82.9] |
+| fastText (dim 8, no subwords) | 461 words x dim 8: 10.2 KB int8 | 77.8% [63.7, 87.5] | 68.3% [55.8, 78.7] |
+| Rules baseline (regex control, G3) | 377 B of regex source | 86.7% [73.8, 93.7] | 76.7% [64.6, 85.6] |
+| LogisticRegression (char 2-5, context) | 304 KB f32 -- over budget | 97.8% [88.4, 99.6] | 98.3% [91.1, 99.7] |
+
+Every fitted model sees only the same 210-sample train split (the 45-sample
+validation split exists solely for the student's checkpoint selection), and
+fastText runs at the student's `dim` 8 with subword n-grams off, so G4's
+comparison is between two linear bag-of-token models whose int8 footprints
+both sit under the 40 KB envelope (10.2 KB vs 2.1 KB).  Reading: the CIs
+overlap, fastText wins the frozen test set while the student wins the real
+held-out set; the regex control's strength on the frozen test (86.7%) shows
+how much of the *synthetic* test distribution its generation patterns
+explain -- which is what the real held-out set (G3) is for; the 304 KB char
+model prices the headroom an unconstrained footprint buys.  The student is
+the only entry that is also bit-exact, arena-bounded and emitted as C99 from
+the same graph the reference VM executes.
 
 
