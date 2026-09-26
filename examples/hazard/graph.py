@@ -23,6 +23,7 @@ from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
 __all__ = (
     "DEFAULT_DIM",
     "DEFAULT_LABELS",
+    "HAZARD_CLASSES",
     "build_bag_graph",
     "label_quant",
     "random_weights",
@@ -31,16 +32,30 @@ __all__ = (
 #: Embedding width of the M2.0 contract: 96 tokens x (8 + 6) = 1,344 B of arena.
 DEFAULT_DIM: Final = 8
 
-#: Label count of the proposed hazard taxonomy (ROADMAP Phase 2, question 2).
-DEFAULT_LABELS: Final = 6
+#: Frozen Phase 2 6-class security taxonomy (M2.0 / ROADMAP Open Question 2).
+HAZARD_CLASSES: Final[tuple[str, ...]] = (
+    "benign",             # 0: standard safe code
+    "dynamic_exec",       # 1: eval, exec, compile, __import__
+    "deserialization",    # 2: pickle, marshal, unsafe yaml loader
+    "shell_injection",    # 3: os.system, subprocess with shell=True
+    "tempfile",           # 4: tempfile.mktemp, predictable temporary paths
+    "unsafe_validation",  # 5: assert-based access control / security validation
+)
 
-#: Requantisation of the logits, i.e. the int8 scale the calibration would find.
-_LABEL_SCALE: Final = 1.0 / 40.0
+#: Label count of the frozen hazard taxonomy.
+DEFAULT_LABELS: Final = len(HAZARD_CLASSES)
+
+#: Label requantisation scale.  ``examples/hazard/train.py`` (stage 2) derives
+#: the real value from the trained student's integer accumulators over
+#: train+val; the shipped constant is that calibration for the exported
+#: artifact (127 / max|accum| = 127 / 37,772), so a plain
+#: ``build_bag_graph()`` matches the shipped student.
+_LABEL_SCALE: Final = 127.0 / 37772
 
 
-def label_quant() -> QuantParam:
-    """The logit quantisation M2.2's calibration is expected to land on."""
-    return QuantParam(*compute_multiplier_and_shift(_LABEL_SCALE))
+def label_quant(scale: float = _LABEL_SCALE) -> QuantParam:
+    """The logit quantisation for ``scale`` (defaults to the calibrated one)."""
+    return QuantParam(*compute_multiplier_and_shift(scale))
 
 
 def random_weights(
@@ -61,17 +76,22 @@ def build_bag_graph(
     tokens: int = TOKEN_COUNT,
     dim: int = DEFAULT_DIM,
     labels: int = DEFAULT_LABELS,
+    label_scale: float = _LABEL_SCALE,
 ) -> Graph:
     """Builds the Phase 2 classifier over ``tokens`` uint8 ids.
 
     ``MAXPOOL1D(axis=0)`` is what makes a text model expressible: without it the
     pool would reduce the *class* axis and ``ARGMAX`` would return a token index
     instead of a label (see ROADMAP.md, Phase 2 IR amendment).
+
+    ``label_scale`` is the logit requantisation scale: training passes its
+    calibration here so the graph QAT optimised for is the graph that ships;
+    the default is the calibrated value for the exported student.
     """
     tensors = {
         "tokens": TensorDesc("tokens", shape=(tokens,), dtype=DType.UINT8),
         "emb": TensorDesc("emb", shape=(tokens, dim), dtype=DType.INT8),
-        "logits": TensorDesc("logits", shape=(tokens, labels), dtype=DType.INT8, quant=label_quant()),
+        "logits": TensorDesc("logits", shape=(tokens, labels), dtype=DType.INT8, quant=label_quant(label_scale)),
         "pooled": TensorDesc("pooled", shape=(1, labels), dtype=DType.INT8),
         "label": TensorDesc("label", shape=(), dtype=DType.INT8),
     }
