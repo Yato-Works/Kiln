@@ -33,6 +33,7 @@ from kiln.ref.ref import run_ref
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = REPO_ROOT / "examples" / "hazard" / "frontend"
 TOKENIZER_SRC = FRONTEND_DIR / "hazard_tokenizer.c"
+PIPELINE_SRC = FRONTEND_DIR / "hazard_pipeline.c"
 
 GCC_FLAGS = ("-std=c99", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic")
 
@@ -99,6 +100,8 @@ int main(int argc, char **argv) {
 
 
 _PIPELINE_MAIN = _HEX_HEADER + """
+#include "hazard_pipeline.h"
+
 int main(int argc, char **argv) {
     if (argc < 2) return 1;
 
@@ -106,9 +109,7 @@ int main(int argc, char **argv) {
     size_t length = 0;
     if (!_decode(argv[1], source, &length)) return 2;
 
-    uint8_t tokens[HAZARD_TOKEN_COUNT];
-    hazard_tokenize(source, length, tokens);
-    printf("%d\\n", (int)kiln_predict(tokens, HAZARD_TOKEN_COUNT));
+    printf("%d\\n", (int)hazard_predict_source(source, length));
     return 0;
 }
 """
@@ -150,7 +151,11 @@ def pipeline_exe(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Raw snippet -> C tokenizer -> emitted Phase 2 graph -> label, all in C."""
     graph = build_bag_graph()
     weights = random_weights()
-    return _build("hazard_pipeline", emit_c(graph, weights, runtime_header=None) + _PIPELINE_MAIN)
+    return _build(
+        "hazard_pipeline",
+        emit_c(graph, weights, runtime_header=None) + _PIPELINE_MAIN,
+        extra=(str(PIPELINE_SRC),),
+    )
 
 
 def test_header_constants_match_the_contract(tokenizer_exe: Path) -> None:
