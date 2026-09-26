@@ -277,8 +277,9 @@ which is what makes it a *generality* proof rather than a second benchmark.
 #### M2.0 feature contract (FROZEN 2026-09-26)
 
 The normative implementation is `examples/hazard/tokenizer.py` -- the spec *is*
-the code, because M2.4 has to reproduce it in C -- and
-`tests/test_hazard_tokenizer.py` pins it:
+the code -- and `tests/test_hazard_tokenizer.py` pins it.  The C frontend
+`examples/hazard/frontend/hazard_tokenizer.c` is bit-exact against it
+(`tests/test_hazard_frontend.py`, M2.4):
 
 | Item | Contract |
 | :--- | :--- |
@@ -352,7 +353,7 @@ is therefore a question about the window, not about the model size.
 | M2.1 | Meta-prompt generator + synthesis harness producing the frozen corpus | manifest hash reproduces the corpus bit-exactly |
 | M2.2 | int8 student (`EMBEDDING` + `MATMUL` + `MAXPOOL1D(axis=0)` + `ARGMAX`) trained by distillation, lowered to Kiln IR | arena/ROM audited (table above); `MATMUL` and `EMBEDDING` leave the "unexercised" list |
 | M2.3 | Showdown report: Kiln student vs fastText vs rules baseline, with CIs | numbers in this section, reproducible by one command |
-| M2.4 | PCM→C equivalent: raw source text -> fixed-point tokenizer -> emitted graph, all C | a Phase 1b-style `tests/test_*.py` bit-exactness check |
+| M2.4 | Raw source text -> fixed-point tokenizer -> emitted graph, all C | **DONE**: `examples/hazard/frontend/hazard_tokenizer.c/h`, checked by `tests/test_hazard_frontend.py` (`-std=c99 -O3 -Wall -Wextra -Werror -pedantic`) |
 | M2.5 | Differential-fuzzing distillation loop (unlabeled code as a fuzzing oracle) | documented as an experiment, success or failure |
 
 ### Open questions (to settle before M2.1)
