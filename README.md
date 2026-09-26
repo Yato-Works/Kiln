@@ -98,6 +98,7 @@ kiln/backend/    C99 emitter (one static arena, zero-malloc)
 kiln/ref/        independent integer reference interpreter (the oracle)
 kiln/cli.py      `compile`, `audit`, `verify`, `ops`
 examples/kws/    Phase 1: model, training recipes, evaluation, fixed-point C frontend
+examples/hazard/ Phase 2: M2.0 fixed-point feature contract + token-bag graph
 tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM→C E2E
 ```
 

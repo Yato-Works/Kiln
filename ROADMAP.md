@@ -10,7 +10,7 @@
 | :---: | :--- | :--- | :--- | :---: |
 | **0** | **核の確立 (Core Invariants)** | 決定論的整数コンパイラ核の完成 | 5核ファイル、KIR.md凍結、差分・極値・タイブレーク検証 (全50件グリーン) | **DONE** |
 | **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
-| **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | UPCOMING |
+| **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | IN PROGRESS |
 | **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml`、自動タスク振り分け、アーキテクチャ探索 (RAM/ROM/レイテンシ パレート解) | PLANNED |
 | **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | 実機ファーム検証 (Pi/Cortex-M)、残存能力監査 (Linear Probing)、区間境界伝播、`kiln link` | PLANNED |
 | **5** | **ムーンショット (Moonshots)** | 核を汚さない実験ブランチでの賭け | 論理ゲート網バックエンド、CBMC/Frama-C 形式検証、決定木/DNF 抽出、オンデバイス整数SGD | EXPERIMENTAL |
@@ -257,7 +257,8 @@ Phase 1 was developed without version control; the tree is now a git repository
 
 ## Phase 2 Detail (DRAFT): Synthetic-Data Distillation Pipeline
 
-**Status**: DRAFT, not started.  Phase 1 proved the *back half* of the framework on a
+**Status**: M2.0 **done** (feature contract frozen, see below); M2.1+ not started.
+Phase 1 proved the *back half* of the framework on a
 public dataset with no LLM in the loop; Phase 2 has to prove the *front half* — the half
 that motivated Kiln in the first place.  The tasks Kiln is meant to serve (detecting a
 dangerous API call, a policy violation, a suspicious byte pattern) are the ones **without**
@@ -272,6 +273,29 @@ contains (e.g. `eval`/`exec`, `pickle.loads`, `subprocess` with `shell=True`, `o
 The output is a small label set; the input is text, so the graph is
 `EMBEDDING`/`MATMUL`-shaped — deliberately the opposite of Phase 1's convolution stack,
 which is what makes it a *generality* proof rather than a second benchmark.
+
+#### M2.0 feature contract (FROZEN 2026-09-26)
+
+The normative implementation is `examples/hazard/tokenizer.py` -- the spec *is*
+the code, because M2.4 has to reproduce it in C -- and
+`tests/test_hazard_tokenizer.py` pins it:
+
+| Item | Contract |
+| :--- | :--- |
+| Normal form | UTF-8 bytes; `A-Z` -> lowercase; control bytes and `0x7F` -> space; bytes `>= 0x80` -> `?`; truncated and space-padded to exactly `WINDOW_BYTES = 48` |
+| Vocabulary | 256 ids, all `EMBEDDING` can address: id `0` unused, `1..96` printable ASCII (`byte - 0x1F`), `97..255` hashed bigrams |
+| Bigrams | `97 + fnv1a32(byte, successor) % 159`, with a space sentinel after the last byte, so there are exactly `WINDOW_BYTES` pairs |
+| Token vector | `TOKEN_COUNT = 96` uint8 ids: the 48 byte ids then the 48 bigram ids, i.e. one flat tensor and one `kiln_predict(tokens, 96)` call |
+| Unknown tokens | none: the map is total over the 256 byte values, so there is no `[UNK]` path; non-ASCII folds to `?` one byte at a time |
+| Round trip | `detokenize(tokenize(text)[:48]) == normalize_bytes(text)` and `tokenize(normalize_bytes(text)) == tokenize(text)` |
+| Window budget | arena `= TOKEN_COUNT * (dim + labels)`: 96 tokens -> 1,344 B at `dim` 8 / 6 labels (asserted); `WINDOW_BYTES` may be raised to 96 only at `dim` 4 (1,920 B) |
+
+`tests/test_hazard_tokenizer.py` also runs the loop end to end: text -> contract
+ids -> *emitted* C == `kiln.ref` bit for bit, compiled with
+`-std=c99 -O3 -Wall -Wextra -Werror -pedantic`, with every label inside the class
+set.  That is M2.4 minus the C tokenizer itself.  Left open for M2.1/M2.2: the
+label taxonomy (question 2 below), the teacher and the corpus; the head in
+`examples/hazard/graph.py` assumes 6 labels.
 
 #### IR amendment: `MAXPOOL1D(axis=...)` (2026-09-26)
 
@@ -324,7 +348,7 @@ is therefore a question about the window, not about the model size.
 
 | # | Deliverable | Acceptance test |
 | :---: | :--- | :--- |
-| M2.0 | Feature-contract spec (tokenizer, vocabulary size, int8 packing, unknown-token policy) | written in this file + round-trip unit test; IR prerequisite `MAXPOOL1D(axis=0)` **done** (see the amendment above) |
+| M2.0 | Feature-contract spec (tokenizer, vocabulary size, int8 packing, unknown-token policy) | **DONE**: `examples/hazard/tokenizer.py` + the contract table below + `tests/test_hazard_tokenizer.py` (54 checks, including text -> emitted-C parity); the `MAXPOOL1D(axis=0)` prerequisite is done as well |
 | M2.1 | Meta-prompt generator + synthesis harness producing the frozen corpus | manifest hash reproduces the corpus bit-exactly |
 | M2.2 | int8 student (`EMBEDDING` + `MATMUL` + `MAXPOOL1D(axis=0)` + `ARGMAX`) trained by distillation, lowered to Kiln IR | arena/ROM audited (table above); `MATMUL` and `EMBEDDING` leave the "unexercised" list |
 | M2.3 | Showdown report: Kiln student vs fastText vs rules baseline, with CIs | numbers in this section, reproducible by one command |
@@ -338,7 +362,10 @@ is therefore a question about the window, not about the model size.
    make it cheap to re-run but non-reproducible.  Proposal: freeze the corpus, keep the
    generator script + manifest in-tree.
 2. **Label space**: one hazard class per snippet (single-label) or multi-label?  Single-label
-   keeps `ARGMAX` as the graph exit and matches Phase 1's contract.
+   keeps `ARGMAX` as the graph exit and matches Phase 1's contract, so
+   `examples/hazard/graph.py` assumes a 6-label single-label head; the taxonomy itself
+   (benign, dynamic code execution, deserialization, shell injection, insecure tempfile,
+   unsafe validation) is a proposal and only has to be frozen before M2.1's corpus exists.
 3. **Real held-out source**: which public, licence-compatible code supplies the *real*
    evaluation set (and how to guarantee it never enters synthesis)?
 4. **Distillation signal**: hard labels only, or teacher logits (soft targets)?  Only hard

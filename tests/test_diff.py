@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from examples.hazard.graph import build_bag_graph, random_weights
 from kiln.backend.c99.emit_c import emit_c
-from kiln.frontend.pytorch import compute_multiplier_and_shift
 from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
 from kiln.ref.ref import run_ref
 
@@ -196,7 +196,8 @@ int main(int argc, char **argv) {{
         reference bit-for-bit and every prediction must be a real class index.
         """
         tokens, dim, classes = 24, 4, 3
-        graph, weights = _bag_graph(tokens, dim, classes)
+        graph = build_bag_graph(tokens, dim, classes)
+        weights = random_weights(dim, classes)
 
         rng = random.Random(4242)
         test_inputs = [[rng.randrange(256) for _ in range(tokens)] for _ in range(12)]
@@ -211,42 +212,8 @@ int main(int argc, char **argv) {{
 
 
 
-BAG_QUANT = QuantParam(*compute_multiplier_and_shift(1.0 / 40.0))
-
-
-def _bag_graph(tokens: int, dim: int, classes: int, *, seed: int = 1337) -> tuple[Graph, dict]:
-    """Phase 2's text-shaped graph: a bag of token embeddings, pooled over tokens.
-
-    ``EMBEDDING -> MATMUL -> MAXPOOL1D(axis=0) -> ARGMAX``.  The window has to run
-    over the *leading* (token) axis; without the ``axis`` attribute the pool would
-    reduce the last (class) axis and ARGMAX would return an index that is not a
-    label at all.
-    """
-    rng = random.Random(seed)
-    tensors = {
-        "tokens": TensorDesc("tokens", shape=(tokens,), dtype=DType.UINT8),
-        "emb": TensorDesc("emb", shape=(tokens, dim), dtype=DType.INT8),
-        "logits": TensorDesc("logits", shape=(tokens, classes), dtype=DType.INT8, quant=BAG_QUANT),
-        "pooled": TensorDesc("pooled", shape=(1, classes), dtype=DType.INT8),
-        "label": TensorDesc("label", shape=(), dtype=DType.INT8),
-    }
-    weights = {
-        "w_emb": [[rng.randint(-40, 40) for _ in range(dim)] for _ in range(256)],
-        "w_mm": [[rng.randint(-20, 20) for _ in range(dim)] for _ in range(classes)],
-    }
-    nodes = [
-        Node(OpType.EMBEDDING, "op_emb", inputs=["tokens"], outputs=["emb"], attrs={"weight": "w_emb"}),
-        Node(OpType.MATMUL, "op_mm", inputs=["emb"], outputs=["logits"], attrs={"weight": "w_mm"}),
-        Node(
-            OpType.MAXPOOL1D,
-            "op_pool",
-            inputs=["logits"],
-            outputs=["pooled"],
-            attrs={"axis": 0, "kernel_size": tokens, "stride": tokens, "padding": 0},
-        ),
-        Node(OpType.ARGMAX, "op_argmax", inputs=["pooled"], outputs=["label"]),
-    ]
-    return Graph(inputs=["tokens"], outputs=["label"], nodes=nodes, tensors=tensors), weights
+#: The Phase 2 bag shape itself lives in ``examples/hazard/graph.py`` (M2.0/M2.2);
+#: this file only exercises its IR behaviour, i.e. ``MAXPOOL1D(axis=0)``.
 
 
 def _class_axis_graph(attrs: dict) -> Graph:
@@ -299,7 +266,8 @@ def test_maxpool_axis_is_validated() -> None:
 
 def test_bag_graph_without_the_axis_attribute_is_rejected() -> None:
     """Phase 2's pitfall: pooling the class axis instead of the token axis."""
-    graph, weights = _bag_graph(tokens=24, dim=4, classes=3)
+    graph = build_bag_graph(tokens=24, dim=4, labels=3)
+    weights = random_weights(4, 3)
     nodes = [
         Node(
             OpType.MAXPOOL1D,
