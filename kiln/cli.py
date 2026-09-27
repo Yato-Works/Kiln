@@ -16,6 +16,9 @@ from .budget.report import BudgetReport, audit_graph, format_budget_certificate
 from .frontend.pytorch import export_to_kir
 from .ir.kir import DType, Graph, OpType
 from .ref.ref import run_ref
+from .search import SearchRow, run_search
+from .search.report import format_search_report, search_results_csv
+from .spec import load_spec, resolve_model_graph
 
 
 # ANSI Color formatting
@@ -129,6 +132,153 @@ def cmd_compile(args: argparse.Namespace) -> int:
     except Exception as e:
         print(_color(f"[ERROR] Compilation failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
         return 1
+
+
+def cmd_build(args: argparse.Namespace) -> int:
+    """Declarative pipeline: kiln.yaml -> resolve model -> audit budget -> emit C99."""
+    try:
+        task = load_spec(args.spec)
+        loaded = resolve_model_graph(task)
+        graph, weights = loaded.graph, loaded.weights
+
+        # Soft contract check: the declared input must match the resolved graph.
+        input_desc = graph.tensors[graph.inputs[0]]
+        if tuple(input_desc.shape) != tuple(task.input.shape):
+            print(
+                _color(
+                    f"[WARN] spec input shape {task.input.shape} does not match "
+                    f"graph input {tuple(input_desc.shape)}",
+                    Style.BOLD + Style.YELLOW,
+                ),
+                file=sys.stderr,
+            )
+
+        report = audit_graph(graph, weights, alignment=args.alignment)
+        cert = format_budget_certificate(report)
+
+        out_dir = Path(args.output) if args.output else task.base_dir / "build"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # `--runtime-header None` (or an empty string) means "emit a
+        # self-contained translation unit", mirroring cmd_compile.
+        runtime_header = args.runtime_header
+        if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
+            runtime_header = None
+        out_c = out_dir / "model.c"
+        write_c(out_c, graph, weights, alignment=args.alignment, runtime_header=runtime_header)
+        (out_dir / "budget_certificate.txt").write_text(cert + "\n", encoding="utf-8")
+
+        # Ship the declared C frontend alongside the generated translation unit.
+        if task.frontend is not None:
+            for rel in (*task.frontend.source_files, *task.frontend.header_files):
+                src = task.resolve_path(rel)
+                if src.is_file():
+                    shutil.copy2(src, out_dir / src.name)
+                else:
+                    print(
+                        _color(f"[WARN] frontend file not found: {src}", Style.BOLD + Style.YELLOW),
+                        file=sys.stderr,
+                    )
+
+        print(_color(cert, Style.CYAN))
+
+        checks = [
+            ("arena RAM", report.arena_ram_bytes, task.budget.ram_arena_max_bytes),
+            ("total ROM", report.total_rom_bytes, task.budget.rom_total_max_bytes),
+        ]
+        if task.budget.macs_max is not None:
+            checks.append(("MACs", report.total_macs, task.budget.macs_max))
+
+        violations: list[str] = []
+        for label, used, limit in checks:
+            if used <= limit:
+                status = _color("OK", Style.GREEN)
+            else:
+                status = _color("EXCEEDED", Style.RED)
+                violations.append(f"{label} {used:,} > {limit:,}")
+            print(f"[BUDGET] {label:<10} {used:,} <= {limit:,} ... {status}")
+
+        if violations:
+            print(
+                _color(
+                    f"[BUDGET EXCEEDED] {task.name}: " + "; ".join(violations),
+                    Style.BOLD + Style.RED,
+                ),
+                file=sys.stderr,
+            )
+            return 1
+
+        print(
+            _color("[SUCCESS]", Style.BOLD + Style.GREEN)
+            + f" Built {task.name} -> {out_c} "
+            + _color(
+                f"(Arena RAM: {report.arena_ram_bytes:,} B, Total ROM: {report.total_rom_bytes:,} B, MACs: {report.total_macs:,})",
+                Style.BOLD + Style.YELLOW,
+            )
+        )
+        return 0
+    except Exception as e:
+        print(_color(f"[ERROR] Build failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
+        return 1
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    """Declarative architecture search: enumerate the declared grid, gate every
+    candidate on the spec's budget and report the RAM/ROM/capacity Pareto front."""
+    try:
+        task = load_spec(args.spec)
+        outcome = run_search(task, alignment=args.alignment)
+    except Exception as e:
+        print(_color(f"[ERROR] Search failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
+        return 1
+
+    # run_search has already rejected a spec without a search block.
+    assert task.search is not None
+    names = sorted(task.search.params)
+
+    def _label(row: SearchRow) -> str:
+        return " ".join(f"{name}={row.params[name]}" for name in names)
+
+    print(_color(f"[SEARCH] {task.name}: {len(outcome.rows)} candidates", Style.BOLD + Style.CYAN))
+    print(_color(
+        f"{'candidate':<24} {'arena RAM':>10} {'ROM':>8} {'MACs':>8} {'cycles':>9}  verdict",
+        Style.BOLD + Style.CYAN,
+    ))
+    for index, row in enumerate(outcome.rows):
+        if row.error is not None:
+            verdict = _color("ERROR", Style.RED) + _color(f" {row.error}", Style.GRAY)
+            print(f"{_label(row):<24} {'-':>10} {'-':>8} {'-':>8} {'-':>9}  {verdict}")
+            continue
+        if row.feasible:
+            verdict = _color("PARETO" if index in outcome.pareto else "fits", Style.GREEN)
+        else:
+            verdict = _color("OVER", Style.RED) + _color(" " + "; ".join(row.violations), Style.GRAY)
+        print(
+            f"{_label(row):<24} {row.arena_ram_bytes:>10,} {row.total_rom_bytes:>8,} "
+            f"{row.total_macs:>8,} {row.estimated_worst_cycles:>9,}  {verdict}"
+        )
+
+    out_dir = Path(args.output) if args.output else task.base_dir / "search"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report_md = out_dir / "search_report.md"
+    report_csv = out_dir / "search_results.csv"
+    report_md.write_text(format_search_report(task, outcome), encoding="utf-8")
+    report_csv.write_text(search_results_csv(outcome, names), encoding="utf-8")
+
+    print()
+    print(_color(
+        f"[SEARCH] {outcome.feasible_count} of {len(outcome.rows)} candidates fit the budget; "
+        f"{len(outcome.pareto)} on the Pareto front -> {report_md}",
+        Style.BOLD + Style.YELLOW,
+    ))
+    if outcome.feasible_count == 0:
+        print(
+            _color(f"[NO CANDIDATE FITS] {task.name}: the declared grid never meets the budget",
+                   Style.BOLD + Style.RED),
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
@@ -316,6 +466,22 @@ def create_parser() -> argparse.ArgumentParser:
     p_compile.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
     p_compile.add_argument("--runtime-header", default="kiln_runtime.h", help="Runtime header to include (or None)")
 
+    # build (declarative kiln.yaml pipeline)
+    p_build = subparsers.add_parser("build", help="Build a declarative kiln.yaml task spec to C99")
+    p_build.add_argument("spec", help="Path to the kiln.yaml task specification")
+    p_build.add_argument("-o", "--output", default=None, help="Output directory (default: <spec dir>/build)")
+    p_build.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
+    p_build.add_argument("--runtime-header", default="kiln_runtime.h", help="Runtime header to include (or None)")
+
+    # search (compile-time architecture exploration over a `search:` grid)
+    p_search = subparsers.add_parser(
+        "search",
+        help="Enumerate a kiln.yaml search grid and report the RAM/ROM/capacity Pareto front",
+    )
+    p_search.add_argument("spec", help="Path to the kiln.yaml task specification (needs a search: block)")
+    p_search.add_argument("-o", "--output", default=None, help="Output directory for the report (default: <spec dir>/search)")
+    p_search.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
+
     # audit
     p_audit = subparsers.add_parser("audit", help="Perform static footprint & latency audit")
     p_audit.add_argument("model_path", help="Path to PyTorch model .py file")
@@ -340,6 +506,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "compile":
         return cmd_compile(args)
+    elif args.command == "build":
+        return cmd_build(args)
+    elif args.command == "search":
+        return cmd_search(args)
     elif args.command == "audit":
         return cmd_audit(args)
     elif args.command == "verify":

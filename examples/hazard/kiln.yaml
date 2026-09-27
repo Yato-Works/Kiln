@@ -1,0 +1,48 @@
+# Kiln declarative task spec: Phase 2 hazard sniffer (bag-of-tokens classifier).
+# Build with:  kiln build examples/hazard/kiln.yaml
+name: hazard-sniffer
+version: 1
+task: classification
+domain: text
+
+input:
+  name: tokens
+  shape: [96]        # TOKEN_COUNT uint8 token ids; arena = 96 * (8 + 6) = 1,344 B
+  dtype: uint8
+
+output:
+  name: label
+  dtype: int8
+  classes:
+    - benign
+    - dynamic_exec
+    - deserialization
+    - shell_injection
+    - tempfile
+    - unsafe_validation
+
+model:
+  # Factory returning (Graph, weights): the shipped bag-of-tokens graph plus the
+  # checked-in int8 student artifact (hazard_int8_weights.json).
+  entry_point: examples.hazard.graph:build_hazard_model
+  weights: hazard_int8_weights.json
+
+budget:
+  ram_arena_max_bytes: 2048   # measured: 1,344 B
+  rom_total_max_bytes: 40960  # measured: 816 B (weights + LUTs)
+  zero_malloc: true
+  deterministic: true
+
+frontend:
+  type: tokenizer
+  source_files:
+    - frontend/hazard_tokenizer.c
+    - frontend/hazard_pipeline.c
+  header_files:
+    - frontend/hazard_tokenizer.h
+    - frontend/hazard_pipeline.h
+
+dataset:
+  corpus: data/hazard_corpus.json
+  manifest: data/manifest.json
+  split_seed: 1337

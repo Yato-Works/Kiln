@@ -13,7 +13,9 @@ Sizing (measured, see ROADMAP.md Phase 2): the arena is exactly
 
 from __future__ import annotations
 
+import json
 import random
+from pathlib import Path
 from typing import Any, Final
 
 from examples.hazard.tokenizer import TOKEN_COUNT, VOCAB_SIZE
@@ -24,7 +26,9 @@ __all__ = (
     "DEFAULT_DIM",
     "DEFAULT_LABELS",
     "HAZARD_CLASSES",
+    "build_bag_candidate",
     "build_bag_graph",
+    "build_hazard_model",
     "label_quant",
     "random_weights",
 )
@@ -70,6 +74,48 @@ def random_weights(
         "w_emb": [[generator.randint(-40, 40) for _ in range(dim)] for _ in range(VOCAB_SIZE)],
         "w_mm": [[generator.randint(-20, 20) for _ in range(dim)] for _ in range(labels)],
     }
+
+
+#: The shipped int8 student artifact (checked in next to this module).
+_SHIPPED_WEIGHTS: Final = Path(__file__).resolve().parent / "hazard_int8_weights.json"
+
+
+def build_hazard_model(weights_path: str | None = None) -> tuple[Graph, dict[str, Any]]:
+    """``kiln build`` entry point: the Phase 2 graph + the shipped student weights.
+
+    Returns exactly the ``(graph, weights)`` pair the declarative spec loader
+    expects.  Weights default to the checked-in ``hazard_int8_weights.json``
+    artifact; ``weights_path`` overrides it (the loader passes it when the spec
+    sets ``model.weights``).
+    """
+    path = Path(weights_path) if weights_path else _SHIPPED_WEIGHTS
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"hazard student weights not found: {path}; "
+            "train them with `python -m examples.hazard.train`"
+        )
+    student = json.loads(path.read_text(encoding="utf-8"))
+    weights: dict[str, Any] = {"w_emb": student["w_emb"], "w_mm": student["w_mm"]}
+    return build_bag_graph(), weights
+
+
+def build_bag_candidate(
+    tokens: int = TOKEN_COUNT,
+    dim: int = DEFAULT_DIM,
+    labels: int = DEFAULT_LABELS,
+) -> tuple[Graph, dict[str, Any]]:
+    """``kiln search`` entry point: the bag shape for *any* ``(tokens, dim, labels)``.
+
+    The footprint of a Kiln graph is a function of its shapes and weight
+    extents, never of the weight *values*, so a search run needs a shape-exact
+    graph plus placeholder int8 weights -- ``random_weights`` is the
+    deterministic initialiser (seed 1337) that keeps every run reproducible.
+    ``build_hazard_model`` stays the shipped (trained, single-shape) entry point.
+    """
+    return (
+        build_bag_graph(tokens=tokens, dim=dim, labels=labels),
+        random_weights(dim=dim, labels=labels),
+    )
 
 
 def build_bag_graph(

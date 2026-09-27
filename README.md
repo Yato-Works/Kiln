@@ -20,8 +20,9 @@ independent Python reference (`kiln.ref`) and to the PyTorch model it came from.
 | :---: | :--- | :--- |
 | 0 | Compiler core invariants (KIR, differential / edge-case / tie-break fuzzing) | **DONE** |
 | 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** |
-| 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | next |
-| 3-6 | Declarative `kiln.yaml`, certified trust, moonshots, ecosystem | planned |
+| 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
+| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **IN PROGRESS** |
+| 4-6 | Certified trust, moonshots, ecosystem | planned |
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
 [KIR.md](KIR.md) is the frozen intermediate-representation contract.
@@ -39,7 +40,7 @@ Three commands — no dataset download, no compiler needed:
 ```bash
 python -m kiln ops                            # 1. the 7 IR operations (the whole instruction set)
 python -m kiln audit examples/kws/model.py    # 2. static footprint certificate (add --json for machines)
-python -m pytest tests/ -q                    # 3. every guarantee (77 tests, ~1 min)
+python -m pytest tests/ -q                    # 3. every guarantee (236 tests, ~1.5 min)
 ```
 
 Emit the C yourself and build it with any C99 compiler:
@@ -53,6 +54,25 @@ gcc -std=c99 -O2 -Wall -Wextra -Werror -pedantic -c kws_model.c -o kws_model.o
 (`kiln_runtime.h`) is for projects that ship their own shim. `kiln verify <model.py>`
 adds gcc-based differential fuzzing against the Python reference, and `kiln audit --json`
 returns the same certificate as structured data.
+
+### Declarative builds (Phase 3)
+
+A task is a YAML spec, and the budget gate is part of the build:
+
+```bash
+python -m kiln build examples/hazard/kiln.yaml            # kiln.yaml -> model.c + budget_certificate.txt
+python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front
+```
+
+`kiln build` resolves `model.entry_point`, audits the resolved graph against the
+spec's `budget:` and exits non-zero if a limit is exceeded (the artifacts are still
+written, so the failure can be diagnosed). `kiln search` enumerates a grid of
+factory parameters and audits **every candidate at compile time** — a footprint
+depends on shapes and weight extents, never on weight values, so a search needs no
+training run — then writes `search_report.md` and `search_results.csv` next to the
+spec. Both reference specs reproduce the Phase 1 and Phase 2 certificates exactly:
+1,992 B / 39,614 B / 314,342 MACs for KWS and 1,344 B / 2,096 B for the hazard
+student.
 
 ## Phase 1 certificate (keyword spotting, shipped model)
 
@@ -96,7 +116,9 @@ kiln/frontend/   PyTorch -> KIR lowering
 kiln/budget/     static arena/ROM/MAC audit and certificate formatting
 kiln/backend/    C99 emitter (one static arena, zero-malloc)
 kiln/ref/        independent integer reference interpreter (the oracle)
-kiln/cli.py      `compile`, `audit`, `verify`, `ops`
+kiln/spec/       declarative kiln.yaml schema + model/graph resolution
+kiln/search/     compile-time footprint search: grid enumeration, Pareto front, report
+kiln/cli.py      `compile`, `build`, `search`, `audit`, `verify`, `ops`
 examples/kws/    Phase 1: model, training recipes, evaluation, fixed-point C frontend
 examples/hazard/ Phase 2: M2.0 fixed-point feature contract + token-bag graph
 tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM→C E2E

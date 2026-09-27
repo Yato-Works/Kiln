@@ -28,6 +28,8 @@ env/
 *.exe
 /out/
 /kiln_out/
+# Declarative pipeline outputs: `kiln build` -> build/, `kiln search` -> search/
+examples/*/search/
 
 # --- Data that is downloaded, not vendored ---
 # The 107 MB Speech Commands v0.02 test-set archive lives next to the repo

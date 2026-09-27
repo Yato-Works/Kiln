@@ -17,12 +17,13 @@ emitted C, the budget certificate and every benchmark at once.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Final, Mapping
 
 import torch
 import torch.nn as nn
 
-from examples.kws.model import N_FRAMES, N_MELS, quantize_logmel_to_int8
+from examples.kws.model import N_FRAMES, N_MELS, load_kws_model, quantize_logmel_to_int8
 from kiln.frontend.pytorch import compute_multiplier_and_shift, quantize_tensor
 from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
 
@@ -31,6 +32,7 @@ __all__ = (
     "KWS_GRAPH_INPUT",
     "KWS_GRAPH_OUTPUT",
     "KwsKilnGraph",
+    "build_kws_model_graph",
     "calibrate_kws_graph",
     "split_indices",
 )
@@ -214,3 +216,23 @@ def calibrate_kws_graph(
         weights=weights,
         activation_scales=tuple(scales),
     )
+
+
+def build_kws_model_graph(weights_path: str | None = None) -> KwsKilnGraph:
+    """``kiln build`` entry point: shipped checkpoint + dataset calibration.
+
+    Loads the QAT checkpoint into ``KilnKWSModel`` and lowers it with the
+    activation scales calibrated on the frozen validation split, exactly as the
+    Phase 1 benchmarks do.  ``weights_path`` overrides the default checkpoint
+    (the loader passes it when the spec sets ``model.weights``).
+    """
+    # Lazy import: examples.kws.benchmark imports this module at module level.
+    from examples.kws.benchmark import DATA_PATH, load_splits
+
+    if not Path(DATA_PATH).is_file():
+        raise FileNotFoundError(
+            f"{DATA_PATH} not found; build the calibration corpus with "
+            "`python -m examples.kws.precompute`"
+        )
+    specs, _, (_, val_idx, _) = load_splits()
+    return calibrate_kws_graph(load_kws_model(weights_path), specs[val_idx])

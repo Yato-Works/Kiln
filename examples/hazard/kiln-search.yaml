@@ -1,0 +1,36 @@
+# Kiln declarative search spec: Phase 2 hazard sniffer footprint grid.
+# Explore with:  kiln search examples/hazard/kiln-search.yaml
+name: hazard-sniffer-search
+version: 1
+task: classification
+domain: text
+
+input:
+  name: tokens
+  shape: [96]        # the nominal M2.0 window; every candidate rebuilds its own
+  dtype: uint8
+
+output:
+  name: label
+  dtype: int8
+
+model:
+  # The shipped (trained, single-shape) factory stays the spec's model entry...
+  entry_point: examples.hazard.graph:build_hazard_model
+  weights: hazard_int8_weights.json
+
+search:
+  # ...while the search instantiates the shape-parameterized one instead: same
+  # graph, any (tokens, dim), placeholder weights (footprints depend on shapes).
+  entry_point: examples.hazard.graph:build_bag_candidate
+  # arena = tokens * (dim + LABELS) = tokens * (dim + 6): the 2 KB cap decides
+  # the feature window, so this grid maps exactly where that cliff is.
+  params:
+    tokens: [64, 96, 128, 192, 256]
+    dim: [4, 6, 8]
+
+budget:
+  ram_arena_max_bytes: 2048   # tokens * (dim + 6) <= 2,048
+  rom_total_max_bytes: 40960  # 256 * dim placeholder embedding + 6 * dim head
+  zero_malloc: true
+  deterministic: true

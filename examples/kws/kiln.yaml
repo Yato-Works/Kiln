@@ -1,0 +1,42 @@
+# Kiln declarative task spec: Phase 1 keyword spotting (DS-CNN over log-mel).
+# Build with:  kiln build examples/kws/kiln.yaml
+name: kws
+version: 1
+task: classification
+domain: audio
+
+input:
+  name: graph_in
+  shape: [10, 49]    # 10 log-mel bins x 49 frames (N_MELS x N_FRAMES)
+  dtype: int8
+
+output:
+  name: graph_out
+  dtype: int8
+  classes: [silence, unknown, yes, no, up, down, left, right, on, off, stop, go]
+
+model:
+  # Factory returning KwsKilnGraph (.graph/.weights): shipped QAT checkpoint
+  # lowered with activation scales calibrated on the frozen validation split.
+  entry_point: examples.kws.kws_graph:build_kws_model_graph
+  weights: kws_qat_weights.pt
+
+budget:
+  ram_arena_max_bytes: 2048   # measured: 1,992 B
+  rom_total_max_bytes: 40960  # measured: 39,614 B
+  zero_malloc: true
+  deterministic: true
+
+frontend:
+  type: audio
+  source_files:
+    - frontend/kws_frontend.c
+    - frontend/kws_pipeline.c
+  header_files:
+    - frontend/kws_frontend.h
+    - frontend/kws_pipeline.h
+    - frontend/kws_tables.h
+
+dataset:
+  manifest: kws_processed_data.pt
+  split_seed: 1337

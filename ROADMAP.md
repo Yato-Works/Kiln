@@ -10,8 +10,8 @@
 | :---: | :--- | :--- | :--- | :---: |
 | **0** | **核の確立 (Core Invariants)** | 決定論的整数コンパイラ核の完成 | 5核ファイル、KIR.md凍結、差分・極値・タイブレーク検証 (全50件グリーン) | **DONE** |
 | **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
-| **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | IN PROGRESS |
-| **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml`、自動タスク振り分け、アーキテクチャ探索 (RAM/ROM/レイテンシ パレート解) | PLANNED |
+| **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | DONE (M2.5 open) |
+| **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml` + `kiln build` (予算ゲート)、コンパイル時アーキテクチャ探索 `kiln search` (RAM/ROM/容量パレート) 完了; 自動タスク振り分けは未着手 | IN PROGRESS |
 | **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | 実機ファーム検証 (Pi/Cortex-M)、残存能力監査 (Linear Probing)、区間境界伝播、`kiln link` | PLANNED |
 | **5** | **ムーンショット (Moonshots)** | 核を汚さない実験ブランチでの賭け | 論理ゲート網バックエンド、CBMC/Frama-C 形式検証、決定木/DNF 抽出、オンデバイス整数SGD | EXPERIMENTAL |
 | **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | `qemu-user` クロス検証、仕様書先出し、再現可能ビルド、3コマンドのHello World | FUTURE |
@@ -435,5 +435,111 @@ explain -- which is what the real held-out set (G3) is for; the 304 KB char
 model prices the headroom an unconstrained footprint buys.  The student is
 the only entry that is also bit-exact, arena-bounded and emitted as C99 from
 the same graph the reference VM executes.
+
+
+## Phase 3 Progress (2026-09-27)
+
+**Status**: the declarative front half is in place.  `kiln.yaml` + `kiln build`
+(M3.1) turn a task into `model.c` plus a budget certificate behind a hard budget
+gate, and `kiln search` (M3.2) enumerates a declared parameter grid and reports
+the RAM/ROM/capacity Pareto front *without training anything*.
+自動タスク振り分け (automatic task dispatch) is the remaining Phase 3
+deliverable.
+
+### 1. M3.1 declarative spec and `kiln build`
+
+`kiln/spec/schema.py` is a plain-dataclass schema (`input`, `output`, `budget`,
+`model`, `frontend`, `dataset`, `search`; the budget defaults to arena 2,048 B /
+ROM 40,960 B) and `kiln/spec/loader.py` resolves `module:attr` and
+`file.py:attr` entry points, passing `weights_path` / `architecture` when the
+factory asks for them and exporting PyTorch `nn.Module` targets through
+`kiln.frontend.pytorch`.  `kiln build <spec>` then emits `model.c`,
+`budget_certificate.txt` and the declared C frontend files, prints one
+`[BUDGET]` verdict line per limit and returns 1 if any limit is exceeded -- while
+still writing the artifacts, so the failure can be diagnosed.
+
+Two checked-in specs pin the pipeline to the earlier certificates:
+
+| Spec | Reproduces | Arena | ROM | MACs |
+| :--- | :--- | ---: | ---: | ---: |
+| `examples/hazard/kiln.yaml` | M2.2 (Phase 2 close-out §1) | 1,344 B | 2,096 B | 4,608 |
+| `examples/kws/kiln.yaml` | the Phase 1 certificate | 1,992 B | 39,614 B | 314,342 |
+
+`tests/test_spec.py` (26 tests) covers the schema, the resolver and both
+reference specs; `tests/test_cli_build.py` (6) covers the budget gate, the
+frontend copy, the soft input-shape check and the full hazard reference build.
+
+### 2. M3.2 compile-time architecture search (`kiln search`)
+
+The premise is the one Phase 1 and Phase 2 both leaned on: **a Kiln footprint is
+a compile-time quantity**.  `audit_graph` derives the arena, the constant ROM and
+the MAC count from tensor shapes and weight extents, so a candidate's cost is
+known the instant its graph is built -- no training run, no floating point, no
+silicon.  A whole grid of architectures is therefore measurable in milliseconds,
+and the same grid always produces the same report bytes.
+
+`kiln search <spec>` reads the spec's `search:` block (`params` = factory kwargs
+to try, `entry_point` = an optional shape-parameterized factory that replaces
+`model.entry_point` for the search only, `max_candidates` = grid guard), builds
+and audits every candidate with the same `audit_graph` the build uses, gates each
+one on the spec's budget and reports the front over:
+
+| Objective | Direction | Why |
+| :--- | :--- | :--- |
+| `arena_ram_bytes` | minimise | the `.bss` arena is the scarce resource on an MCU |
+| `total_rom_bytes` | minimise | flash is the second constraint, and the RAM/ROM trade is real |
+| `total_macs` | maximise | inside one frozen task the MAC count is the capacity knob; the audit's `estimated_worst_cycles` grows with it |
+
+A candidate that cannot be built (a kernel longer than its input, a window its
+frontend rejects) becomes an *error row* instead of an abort: the point of the
+search is to map the boundary, and the boundary is exactly where candidates stop
+being legal.  Setting `budget.macs_max` turns the MAC axis into a hard constraint,
+which recovers the pure RAM/ROM front.
+
+The shipped reference grid is `examples/hazard/kiln-search.yaml`: 15 candidates =
+`tokens` {64, 96, 128, 192, 256} x `dim` {4, 6, 8}, with the shipped *trained*
+factory kept as `model.entry_point` and the shape-parameterized
+`examples.hazard.graph:build_bag_candidate` as `search.entry_point` (placeholder
+weights are enough -- footprints follow shapes, not values).  Every row matches
+the documented relations `arena = tokens * (dim + labels)`,
+`rom = 256 * dim + labels * dim` and `macs = tokens * labels * dim`:
+
+| dim | tokens | Arena | ROM | MACs | MACs/B | Verdict |
+| ---: | ---: | ---: | ---: | ---: | ---: | :--- |
+| 4 | 64 | 640 B | 1,048 B | 1,536 | 2.40 | fits (Pareto) |
+| 4 | 96 | 960 B | 1,048 B | 2,304 | 2.40 | fits (Pareto) |
+| 4 | 128 | 1,280 B | 1,048 B | 3,072 | 2.40 | fits (Pareto) |
+| 4 | 192 | 1,920 B | 1,048 B | 4,608 | 2.40 | fits (Pareto) |
+| 6 | 64 | 768 B | 1,572 B | 2,304 | 3.00 | fits (Pareto) |
+| 6 | 96 | 1,152 B | 1,572 B | 3,456 | 3.00 | fits (Pareto) |
+| 6 | 128 | 1,536 B | 1,572 B | 4,608 | 3.00 | fits (Pareto) |
+| 8 | 64 | 896 B | 2,096 B | 3,072 | 3.43 | fits (Pareto) |
+| 8 | 96 | 1,344 B | 2,096 B | 4,608 | 3.43 | fits (Pareto) |
+| 8 | 128 | 1,792 B | 2,096 B | 6,144 | 3.43 | fits (Pareto) |
+| 4/6/8 | 192, 256 | 2,304 - 3,584 B | 1,048 - 2,096 B | up to 12,288 | 2.40 - 3.43 | over arena |
+
+Reading.  Ten candidates fit the 2 KB arena and **all ten are non-dominated**:
+this grid is a tight RAM/capacity ladder, where widening the window or the
+embedding always buys MACs for bytes, so no feasible shape is wasteful.  The
+actionable form of that finding is the report's *capacity classes* table (the
+RAM-cheapest shape at each reachable MAC count): at 4,608 MACs the widest
+embedding (`dim` 8 / 96 tokens) costs 1,344 B against 1,920 B for `dim` 4 / 192
+tokens -- 576 B of RAM saved for identical capacity, paid for with 1,048 B of
+extra ROM.  That is the RAM/ROM trade the objective set is meant to expose, and
+it is what the CLI/`search_report.md`/`search_results.csv` triple hands to a
+designer, with the over-budget rows named rather than hidden.
+
+`tests/test_search.py` (36 tests) pins the `search:` schema and its guards, the
+grid order, the front arithmetic (`dominates` / `pareto_front`, ties, the
+maximise direction), the loader's override path (including the refusal to
+override an `nn.Module`), the error rows, the reference grid's exact footprints
+and the determinism of the report bytes.
+
+Left open: re-searching the KWS stage widths (`c0 = 28` and `c1 = 58` from
+Phase 1 finding 2) is a *training* question, not a search-only one -- the current
+lowering calibrates every activation on the corpus, and the never-trained widths
+have no checkpoint -- so it stays a Phase 3 follow-up behind a shape-only
+lowering path in `examples/kws/kws_graph.py`.
+
 
 
