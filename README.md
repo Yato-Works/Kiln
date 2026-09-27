@@ -21,8 +21,9 @@ independent Python reference (`kiln.ref`) and to the PyTorch model it came from.
 | 0 | Compiler core invariants (KIR, differential / edge-case / tie-break fuzzing) | **DONE** |
 | 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** |
 | 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
-| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **IN PROGRESS** |
-| 4-6 | Certified trust, moonshots, ecosystem | planned |
+| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** |
+| 4 | Certified trust: `kiln link` (strict compile + link + image measurement + replay) | **IN PROGRESS** |
+| 5-6 | Moonshots, ecosystem | planned |
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
 [KIR.md](KIR.md) is the frozen intermediate-representation contract.
@@ -35,13 +36,16 @@ python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activa
 pip install -e ".[test]"
 ```
 
-Three commands — no dataset download, no compiler needed:
+Three commands — no dataset download needed:
 
 ```bash
 python -m kiln ops                            # 1. the 7 IR operations (the whole instruction set)
 python -m kiln audit examples/kws/model.py    # 2. static footprint certificate (add --json for machines)
-python -m pytest tests/ -q                    # 3. every guarantee (236 tests, ~1.5 min)
+python -m pytest tests/ -q                    # 3. every guarantee (257 tests, ~2 min)
 ```
+
+The Phase 4 link tests compile and run C, so they skip themselves when the host
+has no C compiler; nothing else in the suite needs one.
 
 Emit the C yourself and build it with any C99 compiler:
 
@@ -62,6 +66,7 @@ A task is a YAML spec, and the budget gate is part of the build:
 ```bash
 python -m kiln build examples/hazard/kiln.yaml            # kiln.yaml -> model.c + budget_certificate.txt
 python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front
+python -m kiln link examples/hazard/kiln.yaml --run       # strict compile + link + image measurement + replay
 ```
 
 `kiln build` resolves `model.entry_point`, audits the resolved graph against the
@@ -73,6 +78,17 @@ training run — then writes `search_report.md` and `search_results.csv` next to
 spec. Both reference specs reproduce the Phase 1 and Phase 2 certificates exactly:
 1,992 B / 39,614 B / 314,342 MACs for KWS and 1,344 B / 2,096 B for the hazard
 student.
+
+`kiln link` closes that loop on a **real binary** (Phase 4): it compiles `model.c`,
+the declared frontend and a generated replay harness with
+`-std=c99 -O3 -Wall -Wextra -Werror -pedantic`, links an executable, and reports
+what the image actually costs -- `.bss` against the audited arena, read-only data
+against the audited weights, and the undefined symbols of the *model object*,
+which is where the zero-malloc guarantee becomes an observation
+(`no allocation entry point referenced`) instead of a claim. With `--run` the
+harness replays five fixed byte vectors and the tests compare the labels a linked
+program prints against `kiln.ref`, for the int8 KWS model and the uint8 hazard
+student alike.
 
 ## Phase 1 certificate (keyword spotting, shipped model)
 
@@ -118,7 +134,8 @@ kiln/backend/    C99 emitter (one static arena, zero-malloc)
 kiln/ref/        independent integer reference interpreter (the oracle)
 kiln/spec/       declarative kiln.yaml schema + model/graph resolution
 kiln/search/     compile-time footprint search: grid enumeration, Pareto front, report
-kiln/cli.py      `compile`, `build`, `search`, `audit`, `verify`, `ops`
+kiln/link/       strict compile + link, image measurement (sections/symbols) and replay harness
+kiln/cli.py      `compile`, `build`, `search`, `link`, `audit`, `verify`, `ops`
 examples/kws/    Phase 1: model, training recipes, evaluation, fixed-point C frontend
 examples/hazard/ Phase 2: M2.0 fixed-point feature contract + token-bag graph
 tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM→C E2E
@@ -131,9 +148,14 @@ tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM�
   Placement is interval-aware (`kiln/ir/arena.py`): the allocator keeps the historical
   First-Fit layout unless a best-fit search *strictly* shrinks the arena, so re-emitting
   an existing model cannot move its offsets and a 20 B gap shortfall no longer costs a
-  whole 1.3 KB block (`ROADMAP.md` §3).
-* Not guaranteed (yet): execution on real silicon (the latency figure is an upper-bound
-  cycle estimate, see Phase 4), and bit-identical *training* runs.
+  whole 1.3 KB block (`ROADMAP.md` §3). Since Phase 4 those guarantees are also
+  *observed* on a linked image (`kiln link`): the model object references no
+  allocation entry point, the linked `.bss` reserves the audited arena, and the
+  labels a linked program prints match the reference oracle.
+* Not guaranteed (yet): execution on real silicon (the latency figure is an
+  upper-bound cycle estimate, and `kiln link` targets the host until a cross
+  toolchain plus a target profile exist — see Phase 4), and bit-identical
+  *training* runs.
 
 ## License
 

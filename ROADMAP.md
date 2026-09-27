@@ -12,7 +12,7 @@
 | **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
 | **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | DONE (M2.5 open) |
 | **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml` + `kiln build` (予算ゲート)、コンパイル時アーキテクチャ探索 `kiln search` (RAM/ROM/容量パレート) 完了; 自動タスク振り分けは未着手 | IN PROGRESS |
-| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | 実機ファーム検証 (Pi/Cortex-M)、残存能力監査 (Linear Probing)、区間境界伝播、`kiln link` | PLANNED |
+| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` (厳格コンパイル + リンク + イメージ計測 + リプレイ) 完了; 区間境界伝播、残存能力監査 (Linear Probing)、実機ファーム検証は未着手 | IN PROGRESS |
 | **5** | **ムーンショット (Moonshots)** | 核を汚さない実験ブランチでの賭け | 論理ゲート網バックエンド、CBMC/Frama-C 形式検証、決定木/DNF 抽出、オンデバイス整数SGD | EXPERIMENTAL |
 | **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | `qemu-user` クロス検証、仕様書先出し、再現可能ビルド、3コマンドのHello World | FUTURE |
 
@@ -540,6 +540,87 @@ Phase 1 finding 2) is a *training* question, not a search-only one -- the curren
 lowering calibrates every activation on the corpus, and the never-trained widths
 have no checkpoint -- so it stays a Phase 3 follow-up behind a shape-only
 lowering path in `examples/kws/kws_graph.py`.
+
+---
+
+## Phase 4 Progress (2026-09-27)
+
+**Status**: M4.1 (`kiln link`) is done -- the emitted C is compiled, linked,
+measured and replayed, and the zero-malloc claim is now an *observation*.  Interval
+boundary propagation, the linear-probing capability audit and on-device firmware
+verification remain open.
+
+### 1. M4.1 `kiln link`: from certificate to measured image
+
+Phase 1-3 verified the emitted *translation unit*; this verifies a *program*.  One
+command now performs six steps: resolve the spec and write `model.c` + certificate
++ the declared frontend (the same helper `kiln build` uses), generate a replay
+harness, compile every translation unit with the strict flags
+(`-std=c99 -O3 -Wall -Wextra -Werror -pedantic`), link a real executable, measure
+the artifact (section sizes, undefined symbols of the model object) and optionally
+run it.
+
+Measured on this repository's own references (host gcc 16.2.0, MSYS2 mingw64; the
+`.bss`/read-only columns include the frontend's own static state):
+
+| Spec | Translation units | Audited arena / ROM | Linked `.bss` | Linked read-only | Allocation refs |
+| :--- | :--- | ---: | ---: | ---: | :--- |
+| `examples/hazard/kiln.yaml` | model.c + tokenizer + pipeline + harness | 1,344 B / 2,096 B | 4,152 B (arena + 2,808 B) | 6,888 B | none |
+| `examples/kws/kiln.yaml` | model.c + audio frontend + pipeline + harness | 1,992 B / 39,614 B | 21,240 B (arena + 19,248 B) | 52,904 B | none |
+
+Both linked binaries replay the harness vectors with labels **bit-identical to
+`kiln.ref`** -- hazard (uint8 tokens) `[4, 3, 3, 2, 0]`, KWS (int8 log-mel)
+`[0, 0, 0, 9, 1]`.  One harness covers both dtypes because the C entry point always
+takes `const uint8_t *`: `to_input_domain` reinterprets the bytes
+two's-complement for an int8 graph input, and the same five vectors therefore
+exercise a token bag and a convolutional stack without a per-model fixture.
+
+Why the extra `.bss` is *reported* instead of hidden: it is the frontend's own
+zero-init scratch (tokenizer/pipeline buffers, the FFT workspace), so the number
+that has to fit a 2 KB MCU is `.bss − arena` versus the frontend's declared static
+state -- the model's own share is exactly the audited arena, which the report
+states as `exact match` when nothing else claims `.bss`.
+
+The zero-malloc guarantee is now checked where it matters: `nm -u` on the *model
+object* must show no reference to `malloc`/`calloc`/`realloc`/`free`
+(`kiln/link/toolchain.py`), and both references report
+`no allocation entry point referenced`.  Measured on this host the model object's
+entire undefined-symbol set is `{abort}` -- the entry point's own length guard --
+which is a stronger statement than "no malloc": the translation unit's only
+external dependency is an abort when the caller violates the input contract, so
+there is nothing left to link against a runtime.  The harness itself is a pure
+function of the input length -- zeros, an alternating 0x00/0xFF pattern, both
+uniform extremes and a `7i + 1 mod 256` ramp -- which targets the three ways a
+fixed-point graph goes wrong (saturation at the extremes, the max pool's
+tie-breaking on a flat input, and an input spread over the whole quantisation
+range) while keeping the linked image reproducible.
+
+The strict flags are load-bearing rather than decorative: a frontend with an
+unused variable fails the link under `-Werror`, so a warning that would otherwise
+be discovered on hardware is discovered here, with the compiler's own message and
+command line in the error.  A declared frontend file that is missing from the tree
+is skipped (with `kiln build` warning about it), because the model can still be
+linked and measured on its own.
+
+`tests/test_link.py` adds 21 tests: the harness/prediction contract, the uint8 vs
+int8 input domains, toolchain discovery (`--cc`, `$KILN_CC`, PATH) and its error
+paths, the strict-flag gate, a missing frontend, a compile error surfacing the
+compiler's diagnosis, the budget gate on `kiln link`, and the two bit-exactness
+tests.  The module skips itself when the host has no C compiler, and the
+zero-malloc section reports `unavailable` instead of guessing when binutils are
+absent -- the same "evidence or an explicit unknown" rule the rest of the
+repository follows.
+
+Open in Phase 4: interval boundary propagation (a static proof that the
+accumulators cannot saturate, reported inside the certificate), the linear-probing
+capability audit, and on-device firmware verification -- which needs a cross
+toolchain (`arm-none-eabi-gcc`, absent on this host, so the firmware path stays
+unverified) plus real hardware.  `kiln link` already walks one code path for both:
+the compiler is discovered through `--cc`/`$KILN_CC`/PATH, so a cross build becomes
+a matter of a target profile (linking script, `-mcpu`, memory map) rather than new
+plumbing.
+
+
 
 
 

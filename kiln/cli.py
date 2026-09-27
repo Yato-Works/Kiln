@@ -16,9 +16,11 @@ from .budget.report import BudgetReport, audit_graph, format_budget_certificate
 from .frontend.pytorch import export_to_kir
 from .ir.kir import DType, Graph, OpType
 from .ref.ref import run_ref
+from .link import ToolchainError, budget_violations, format_link_report, link_spec
 from .search import SearchRow, run_search
 from .search.report import format_search_report, search_results_csv
 from .spec import load_spec, resolve_model_graph
+from .spec.pipeline import emit_spec_artifacts
 
 
 # ANSI Color formatting
@@ -153,32 +155,29 @@ def cmd_build(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
 
-        report = audit_graph(graph, weights, alignment=args.alignment)
-        cert = format_budget_certificate(report)
-
         out_dir = Path(args.output) if args.output else task.base_dir / "build"
-        out_dir.mkdir(parents=True, exist_ok=True)
 
         # `--runtime-header None` (or an empty string) means "emit a
         # self-contained translation unit", mirroring cmd_compile.
         runtime_header = args.runtime_header
         if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
             runtime_header = None
-        out_c = out_dir / "model.c"
-        write_c(out_c, graph, weights, alignment=args.alignment, runtime_header=runtime_header)
-        (out_dir / "budget_certificate.txt").write_text(cert + "\n", encoding="utf-8")
 
-        # Ship the declared C frontend alongside the generated translation unit.
-        if task.frontend is not None:
-            for rel in (*task.frontend.source_files, *task.frontend.header_files):
-                src = task.resolve_path(rel)
-                if src.is_file():
-                    shutil.copy2(src, out_dir / src.name)
-                else:
-                    print(
-                        _color(f"[WARN] frontend file not found: {src}", Style.BOLD + Style.YELLOW),
-                        file=sys.stderr,
-                    )
+        emitted = emit_spec_artifacts(
+            task, loaded, out_dir, alignment=args.alignment, runtime_header=runtime_header
+        )
+        report = emitted.report
+        out_c = emitted.model_c
+        cert = emitted.certificate
+
+        # A declared frontend file that the tree does not have is a warning here
+        # (the build products are still useful); `kiln link` decides its own
+        # policy, because it has to compile whatever it is given.
+        for missing in emitted.missing_frontend:
+            print(
+                _color(f"[WARN] frontend file not found: {missing}", Style.BOLD + Style.YELLOW),
+                file=sys.stderr,
+            )
 
         print(_color(cert, Style.CYAN))
 
@@ -275,6 +274,50 @@ def cmd_search(args: argparse.Namespace) -> int:
         print(
             _color(f"[NO CANDIDATE FITS] {task.name}: the declared grid never meets the budget",
                    Style.BOLD + Style.RED),
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def cmd_link(args: argparse.Namespace) -> int:
+    """Phase 4: compile + link the spec's C artifacts, measure the image, replay it."""
+    try:
+        task = load_spec(args.spec)
+        runtime_header = args.runtime_header
+        if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
+            runtime_header = None
+        outcome = link_spec(
+            task,
+            out_dir=Path(args.output) if args.output else None,
+            cc=args.cc,
+            alignment=args.alignment,
+            runtime_header=runtime_header,
+            run=args.run,
+        )
+    except ToolchainError as e:
+        print(_color(f"[ERROR] Link failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(_color(f"[ERROR] Link failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
+        return 1
+
+    report_text = format_link_report(outcome, task)
+    (outcome.out_dir / "link_report.txt").write_text(report_text + "\n", encoding="utf-8")
+    print(report_text)
+    print(
+        _color("[LINKED]", Style.BOLD + Style.GREEN)
+        + f" {task.name} -> {outcome.executable} "
+        + _color(f"(toolchain: {outcome.toolchain})", Style.BOLD + Style.YELLOW)
+    )
+
+    violations = budget_violations(outcome, task)
+    if violations:
+        print(
+            _color(
+                f"[BUDGET EXCEEDED] {task.name}: " + "; ".join(violations),
+                Style.BOLD + Style.RED,
+            ),
             file=sys.stderr,
         )
         return 1
@@ -482,6 +525,18 @@ def create_parser() -> argparse.ArgumentParser:
     p_search.add_argument("-o", "--output", default=None, help="Output directory for the report (default: <spec dir>/search)")
     p_search.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
 
+    # link (Phase 4: compile + link + measure + replay the emitted C)
+    p_link = subparsers.add_parser(
+        "link",
+        help="Compile and link a kiln.yaml build under strict flags, measure the image and replay it",
+    )
+    p_link.add_argument("spec", help="Path to the kiln.yaml task specification")
+    p_link.add_argument("-o", "--output", default=None, help="Output directory (default: <spec dir>/link)")
+    p_link.add_argument("--cc", default=None, help="C compiler to use (default: $KILN_CC, then gcc/cc/clang on PATH)")
+    p_link.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
+    p_link.add_argument("--runtime-header", default=None, help="Runtime header to include (default: None = self-contained translation unit)")
+    p_link.add_argument("--run", action="store_true", help="Execute the linked binary on the generated vectors")
+
     # audit
     p_audit = subparsers.add_parser("audit", help="Perform static footprint & latency audit")
     p_audit.add_argument("model_path", help="Path to PyTorch model .py file")
@@ -510,6 +565,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_build(args)
     elif args.command == "search":
         return cmd_search(args)
+    elif args.command == "link":
+        return cmd_link(args)
     elif args.command == "audit":
         return cmd_audit(args)
     elif args.command == "verify":

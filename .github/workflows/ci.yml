@@ -34,6 +34,12 @@ jobs:
       - name: Phase 1 certificate (emits C, builds it with gcc, scores it)
         run: python -m examples.kws.evaluate
 
+      - name: Phase 4 link smoke test (strict compile + link + image measurement + replay)
+        # Evidence that the emitted C still compiles as a program, that the model
+        # object references no allocator and that the linked binary's labels match
+        # the reference; the suite below repeats this for both reference specs.
+        run: python -m kiln link examples/hazard/kiln.yaml --run
+
       - name: Test suite
         # The 107 MB Speech Commands archive is not vendored, so the tests that
         # need raw WAVs report as skipped; everything else (including the KWS
