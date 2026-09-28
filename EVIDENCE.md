@@ -2,7 +2,7 @@
 
 Every number below is the verbatim output of a command executed by
 `scripts/reproduce_evidence.py` against this repository on
-2026-09-28 16:24 (Windows 10,
+2026-09-28 16:54 (Windows 10,
 Python 3.11.15, torch 2.5.1+cu121, gcc (Rev3, Built by MSYS2 project) 16.2.0).
 Re-run the script to regenerate this file; nothing in it is hand-written.
 
@@ -23,8 +23,8 @@ $ python -m pytest tests/ -q
 ........................................................................ [ 26%]
 ........................................................................ [ 53%]
 ........................................................................ [ 80%]
-.....................................................                    [100%]
-269 passed in 80.99s (0:01:20)
+......................................................                   [100%]
+270 passed in 66.44s (0:01:06)
 # exit code: 0
 ```
 
@@ -128,13 +128,13 @@ PTQ baseline (dB-domain FP32 training -> quantized C): 50.54%
 ```text
 $ python -m examples.kws.train_aug --out <tmp>/kws_qat_weights_repro.pt
 architecture=shipped params=38,590 train=3423 val=733 test=734 device=cuda
-epoch   50/300 | loss 0.3226 | train 99.85% | val 88.95% | best 89.90%
-epoch  100/300 | loss 0.3037 | train 100.00% | val 90.86% | best 91.41%
-epoch  150/300 | loss 0.2995 | train 100.00% | val 91.27% | best 91.41%
-epoch  200/300 | loss 0.2979 | train 100.00% | val 89.77% | best 91.41%
-epoch  250/300 | loss 0.2971 | train 100.00% | val 89.77% | best 91.41%
-epoch  300/300 | loss 0.2969 | train 100.00% | val 89.63% | best 91.41%
-RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accuracy": 91.41, "test_accuracy": 90.19, "test_samples": 734, "seconds": 83.8, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmpbfby8th2\\kws_qat_weights_repro.pt"}
+epoch   50/300 | loss 0.3190 | train 99.85% | val 89.77% | best 90.04%
+epoch  100/300 | loss 0.3030 | train 100.00% | val 89.50% | best 90.86%
+epoch  150/300 | loss 0.2996 | train 100.00% | val 90.18% | best 90.86%
+epoch  200/300 | loss 0.2975 | train 100.00% | val 90.45% | best 90.86%
+epoch  250/300 | loss 0.2969 | train 100.00% | val 90.04% | best 90.86%
+epoch  300/300 | loss 0.2968 | train 100.00% | val 89.90% | best 90.86%
+RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accuracy": 90.86, "test_accuracy": 90.05, "test_samples": 734, "seconds": 80.8, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmp79crmofx\\kws_qat_weights_repro.pt"}
 # exit code: 0
 ```
 
@@ -142,9 +142,9 @@ RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accu
 
 ```text
 $ python -m examples.kws.qat_eval --weights <tmp>/kws_qat_weights_repro.pt
-QAT (shipped) checkpoint: C99 int8 90.05% | FP32 90.19%
+QAT (shipped) checkpoint: C99 int8 89.92% | FP32 90.05%
   quantization delta : -0.14%
-  checkpoint         : C:\Users\smily\AppData\Local\Temp\tmpbfby8th2\kws_qat_weights_repro.pt
+  checkpoint         : C:\Users\smily\AppData\Local\Temp\tmp79crmofx\kws_qat_weights_repro.pt
   params             : 38,590
   evaluated          : 734 held-out samples
 # exit code: 0
@@ -328,12 +328,12 @@ RESULT {"models": {"Kiln int8 student (emitted C)": {"footprint": "ROM 2,096 B; 
 
 | check | result | source |
 | :--- | :--- | :--- |
-| tests | 269 passed in 80.99s (0:01:20) | exit 0 |
+| tests | 270 passed in 66.44s (0:01:06) | exit 0 |
 | showcase 1 | model.c 14,656 B, nm -u=['abort'] | gcc exit 0 |
 | showcase 2 | refused (exit 1), file written: False | fail-closed |
 | KWS shipped (734 clips) | QAT (shipped) checkpoint: C99 int8 91.01% \| FP32 90.74% | exit 0 |
 | KWS PTQ baseline | PTQ baseline (dB-domain FP32 training -> quantized C): 50.54% | exit 0 |
-| KWS retrain (CUDA) | {"architecture": "shipped", "epochs": 300, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmpbfby8th2\\kws_qat_weights_repro.pt", "parameters": 38590, "seconds": 83.8, "test_accuracy": 90.19, "test_samples": 734, "val_accuracy": 91.41} | eval exit 0 |
+| KWS retrain (CUDA) | {"architecture": "shipped", "epochs": 300, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmp79crmofx\\kws_qat_weights_repro.pt", "parameters": 38590, "seconds": 80.8, "test_accuracy": 90.05, "test_samples": 734, "val_accuracy": 90.86} | eval exit 0 |
 | hazard baseline (sklearn) | Test accuracy (n=45):       100.00% / Held-out accuracy (n=60): 100.00% | exit 0 |
 | hazard showdown | Kiln int8 student: test 73.3% / held-out 73.3% | exit 0 |
 | hazard provenance | hazard_corpus.json: OK / held_out_real.json: OK | manifest.json |

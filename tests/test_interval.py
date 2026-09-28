@@ -215,3 +215,35 @@ def test_propagate_detects_int32_overflow() -> None:
     assert audit.int32_overflow_free is False
     assert audit.node_audits["fc_overflow"].accum_fits_int32 is False
     assert audit.max_accum == count * 127 * 127
+
+
+def test_audit_graph_is_fail_closed_when_propagation_cannot_run() -> None:
+    """An unauditable graph has NO verified overflow freedom: the certificate
+    must say NOT VERIFIED and the build gate must close (fail-closed contract).
+
+    The graph below is structurally valid, but the weights dictionary lacks
+    both tables the graph references -- propagation raises, ``audit_graph``
+    keeps ``interval_audit=None``, and everything downstream must treat the
+    safety property as *unproven*, never as vacuously satisfied.
+    """
+    from kiln.budget.report import audit_graph, format_budget_certificate
+
+    qp = QuantParam(multiplier=1073741824, shift=1)
+    tensors = {
+        "in": TensorDesc("in", shape=(2,), dtype=DType.UINT8),
+        "emb": TensorDesc("emb", shape=(2, 4), dtype=DType.INT8),
+        "logits": TensorDesc("logits", shape=(2, 2), dtype=DType.INT8, quant=qp),
+        "out": TensorDesc("out", shape=(), dtype=DType.INT8),
+    }
+    nodes = [
+        Node(OpType.EMBEDDING, "op_emb", inputs=["in"], outputs=["emb"], attrs={"weight": "w_emb"}),
+        Node(OpType.MATMUL, "op_mm", inputs=["emb"], outputs=["logits"], attrs={"weight": "w_mm"}),
+        Node(OpType.ARGMAX, "op_argmax", inputs=["logits"], outputs=["out"]),
+    ]
+    graph = Graph(inputs=["in"], outputs=["out"], nodes=nodes, tensors=tensors)
+
+    report = audit_graph(graph, weights={})
+
+    assert report.interval_audit is None
+    assert report.int32_overflow_free is False
+    assert "NOT VERIFIED (interval audit unavailable)" in format_budget_certificate(report)

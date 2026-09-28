@@ -204,8 +204,19 @@ def showcase2_frames() -> list[tuple[str, list[str]]]:
 
 def save_gif(frames: list[tuple[str, list[str]]], path: Path) -> None:
     images = [render_frame(title, lines) for title, lines in frames]
-    images[0].save(
-        path, save_all=True, append_images=images[1:], duration=DURATION_MS, loop=0, optimize=True
+    # Uniform canvas: every frame is the same size, filled with the terminal
+    # background, so no viewer compositing ever leaves stale text or a
+    # cleared-to-default band under the shorter frames.
+    width = max(im.size[0] for im in images)
+    height = max(im.size[1] for im in images)
+    uniform = []
+    for im in images:
+        canvas = Image.new("RGB", (width, height), BG)
+        canvas.paste(im, (0, 0))
+        uniform.append(canvas)
+    uniform[0].save(
+        path, save_all=True, append_images=uniform[1:], duration=DURATION_MS, loop=0,
+        optimize=True,
     )
     print(f"wrote {path.name}: {len(images)} frames, {path.stat().st_size:,} B")
 

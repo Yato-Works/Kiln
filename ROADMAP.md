@@ -22,7 +22,7 @@
 
 ### Motivation & Strategic Scope
 Phase 1 intentionally **decouples** the compiler backend from LLM synthetic data generation.
-By utilizing the standard **Speech Commands v2** dataset and comparing directly against the **MLPerf Tiny DS-CNN small benchmark (38.6K params, 12 classes, 92.2% accuracy)**, we provide irrefutable proof that Kiln's integer arithmetic, memory planning, and C99 generation achieve state-of-the-art efficiency on microcontrollers.
+By utilizing the standard **Speech Commands v2** dataset and comparing directly against the **MLPerf Tiny DS-CNN small benchmark (38.6K params, 12 classes, 92.2% accuracy)**, Kiln's integer arithmetic, memory planning, and C99 generation reach a comparable accuracy level (91.01% vs the 92.2% reference, at the same 38.6K-parameter scale) on a different, far smaller training corpus — evidence, not a surpass claim.
 
 ### Two-Stage Execution Strategy
 1. **Phase 1a: Classifier Core Proof**

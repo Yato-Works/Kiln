@@ -112,6 +112,14 @@ student alike.
 | Arena RAM / total ROM | **1,992 B** / 39,614 B | < 2 KB / < 40 KB (asserted) |
 | Raw PCM → label (C frontend + emitted graph) | 24/24 bit-exact vs reference, 23/24 correct, 24/24 identical to the PyTorch pipeline | spans all 12 classes |
 
+Read what each row measures: the 91.01 % int8 figure is computed on
+**precomputed log-mel features** — feature extraction is off-device, and no
+microphone-to-on-chip audio pipeline exists yet. The raw-PCM row demonstrates
+the C frontend end-to-end, but only on 24 fixed clips. The MLPerf Tiny
+DS-CNN small figure (92.2 %, on a ~105 K-clip corpus) is a *reference point
+from a different training corpus* — read the comparison as comparable scale,
+not as having surpassed it.
+
 Two caveats, both documented in `ROADMAP.md`:
 
 * the **compiler** is exactly reproducible, the **training run** is not — CUDA kernels are
@@ -119,6 +127,26 @@ Two caveats, both documented in `ROADMAP.md`:
   (selection therefore uses the validation split, never the test split);
 * 92.2 % (the MLPerf reference) is not reached because the Phase 1 corpus is 4,890 clips
   instead of ~105 K; training accuracy saturates at 99.85 % while validation plateaus near 91.5 %.
+
+## Phase 2 hazard student — what the numbers do and do not claim
+
+The hazard example proves the *pipeline* end to end — teacher distillation →
+int8 student → single C file → certificate → fail-closed refusal — not
+accuracy, and the measured numbers say so plainly (frozen test n=45, real
+held-out n=60, full table in `EVIDENCE.md`):
+
+| model | footprint | test (n=45) | held-out (n=60) |
+| :--- | :--- | :--- | :--- |
+| Kiln int8 student (emitted C) | 2,096 B ROM / 1,344 B arena | 73.3 % | 73.3 % |
+| Rules baseline (regex control) | 377 B of source | 86.7 % | 76.7 % |
+| LogisticRegression (char 2-5) | 304 KB f32 — over budget | 97.8 % | 98.3 % |
+
+At n=45 the gaps are a handful of clips: the 377-byte regex control is
+statistically indistinguishable from the 2 KB network and *wins* on accuracy.
+With only 300 teacher-distilled snippets the task is nearly saturated for
+every model; the student's value is its certified 2 KB envelope, not its
+accuracy. The next step — the first item under "What support would buy" — is
+more teacher data with a proportionally larger *real* held-out set.
 
 ## Datasets and artifacts
 
@@ -179,7 +207,8 @@ python scripts/reproduce_evidence.py    # re-runs every command, writes EVIDENCE
 `EVIDENCE.md` quotes the verbatim stdout of each run (the test suite, `kiln build`,
 `gcc -Werror -pedantic` + `nm -u`, the safety refusal, the KWS and hazard
 evaluations, the training repro and the data-provenance manifest). The showcase
-GIFs are rendered from the same real runs by `scripts/render_demo_gif.py`:
+GIFs are *re-rendered terminal frames* of the same real runs — verbatim captured
+output drawn by `scripts/render_demo_gif.py`, not screen recordings:
 
 * [scripts/demo_showcase1.gif](scripts/demo_showcase1.gif) — the "2KB brain":
   one C file, a clean `gcc -std=c99 -O2 -Wall -Wextra -Werror -pedantic` compile,
