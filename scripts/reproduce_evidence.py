@@ -91,7 +91,7 @@ Re-run the script to regenerate this file; nothing in it is hand-written.
 
     python scripts/reproduce_evidence.py
 
-Submission one-liner (verified by sections 2-11 below):
+Submission one-liner (verified by sections 2-13 below):
 
 > **Kiln compiles a PyTorch model into a single zero-malloc, floating-point-free,
 > dependency-free C99 file, and refuses a dangerous model at build time.**
@@ -185,6 +185,26 @@ Submission one-liner (verified by sections 2-11 below):
     )
     summary_rows.append(("KWS PTQ baseline", " ".join(out.splitlines()[:1]), f"exit {code}"))
 
+    code, out, err = run([sys.executable, "-m", "kiln", "audit", "examples/kws/model.py"])
+    sections.append(
+        command_block("7. KWS -- static footprint certificate", "python -m kiln audit examples/kws/model.py", code, out, err)
+    )
+    kws_cert = " / ".join(
+        line.strip() for line in out.splitlines()
+        if "Arena" in line or "Total Constant ROM" in line or "Total MAC" in line or "Accumulator Safety" in line
+    )
+    summary_rows.append(("KWS certificate (audit)", kws_cert, f"exit {code}"))
+
+    code, out, err = run([sys.executable, "-m", "examples.kws.evaluate"])
+    sections.append(
+        command_block("8. KWS -- Phase 1a benchmark table (full parity)", "python -m examples.kws.evaluate", code, out, err)
+    )
+    kws_table = " / ".join(
+        line.strip() for line in out.splitlines()
+        if "Top-1 Accuracy" in line or "agreement" in line or "Arena" in line or "MACs per inference" in line
+    )
+    summary_rows.append(("KWS Phase 1 table", kws_table, f"exit {code}"))
+
     with tempfile.TemporaryDirectory() as tmp:
         repro_ckpt = Path(tmp) / "kws_qat_weights_repro.pt"
         code, out, err = run(
@@ -193,7 +213,7 @@ Submission one-liner (verified by sections 2-11 below):
         result = extract_result_json(out) or {}
         sections.append(
             command_block(
-                "7. KWS -- fresh training run (CUDA; documented ~1-point spread)",
+                "9. KWS -- fresh training run (CUDA; documented ~1-point spread)",
                 "python -m examples.kws.train_aug --out <tmp>/kws_qat_weights_repro.pt",
                 code, out, err,
             )
@@ -204,7 +224,7 @@ Submission one-liner (verified by sections 2-11 below):
             )
             sections.append(
                 command_block(
-                    "8. KWS -- the retrained checkpoint through the emitted C",
+                    "10. KWS -- the retrained checkpoint through the emitted C",
                     "python -m examples.kws.qat_eval --weights <tmp>/kws_qat_weights_repro.pt",
                     code2, out2, err2,
                 )
@@ -215,7 +235,7 @@ Submission one-liner (verified by sections 2-11 below):
     code, out, err = run([sys.executable, "-m", "examples.hazard.baseline_eval"])
     sections.append(
         command_block(
-            "9. Hazard -- char n-gram + LogisticRegression baseline (provenance, split, confusion)",
+            "11. Hazard -- char n-gram + LogisticRegression baseline (provenance, split, confusion)",
             "python -m examples.hazard.baseline_eval",
             code, out, err,
         )
@@ -228,7 +248,7 @@ Submission one-liner (verified by sections 2-11 below):
     code, out, err = run([sys.executable, "-m", "examples.hazard.benchmark"])
     sections.append(
         command_block(
-            "10. Hazard -- equal-budget showdown (M2.3)",
+            "12. Hazard -- equal-budget showdown (M2.3)",
             "python -m examples.hazard.benchmark",
             code, out, err,
         )
@@ -253,7 +273,7 @@ Submission one-liner (verified by sections 2-11 below):
         digest = hashlib.sha256((data / name).read_bytes()).hexdigest()
         checks[name] = (digest == manifest.get(key), digest)
     sections.append(
-        "### 11. Hazard data provenance (manifest-pinned)\n\n"
+        "### 13. Hazard data provenance (manifest-pinned)\n\n"
         f"- teacher model: `{manifest['teacher_model']}`\n"
         f"- corpus: {manifest['num_samples']} synthetic snippets, "
         f"{manifest['num_classes']} classes, split seed {manifest['split_seed']}, "

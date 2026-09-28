@@ -2,13 +2,13 @@
 
 Every number below is the verbatim output of a command executed by
 `scripts/reproduce_evidence.py` against this repository on
-2026-09-28 16:54 (Windows 10,
+2026-09-28 17:25 (Windows 10,
 Python 3.11.15, torch 2.5.1+cu121, gcc (Rev3, Built by MSYS2 project) 16.2.0).
 Re-run the script to regenerate this file; nothing in it is hand-written.
 
     python scripts/reproduce_evidence.py
 
-Submission one-liner (verified by sections 2-11 below):
+Submission one-liner (verified by sections 2-13 below):
 
 > **Kiln compiles a PyTorch model into a single zero-malloc, floating-point-free,
 > dependency-free C99 file, and refuses a dangerous model at build time.**
@@ -24,7 +24,7 @@ $ python -m pytest tests/ -q
 ........................................................................ [ 53%]
 ........................................................................ [ 80%]
 ......................................................                   [100%]
-270 passed in 66.44s (0:01:06)
+270 passed in 69.37s (0:01:09)
 # exit code: 0
 ```
 
@@ -123,34 +123,82 @@ PTQ baseline (dB-domain FP32 training -> quantized C): 50.54%
 # exit code: 0
 ```
 
-### 7. KWS -- fresh training run (CUDA; documented ~1-point spread)
+### 7. KWS -- static footprint certificate
+
+```text
+$ python -m kiln audit examples/kws/model.py
+/*
+ * =========================================================================
+ *                  Kiln Model Static Budget Certificate
+ * =========================================================================
+ *   Arena (.bss) RAM      :    1,992 bytes
+ *   Peak Concurrent RAM   :    1,992 bytes
+ *   Weights ROM           :   38,590 bytes
+ *   LUT Tables ROM        :    1,024 bytes
+ *   Total Constant ROM    :   39,614 bytes
+ * -------------------------------------------------------------------------
+ *   Total MAC Operations  :  314,342 ops
+ *   Total Add Operations  :        0 ops
+ *   Estimated Latency     : 1,587,715 cycles (upper bound)
+ * -------------------------------------------------------------------------
+ *   Dynamic Allocation    :        0 bytes (strictly zero-malloc guarantee)
+ *   Determinism           : Bit-exact verified (C99 fixed-point integer)
+ *   Accumulator Safety    : Verified int32 safe [-385191, +220602]
+ * =========================================================================
+ */
+# exit code: 0
+```
+
+### 8. KWS -- Phase 1a benchmark table (full parity)
+
+```text
+$ python -m examples.kws.evaluate
+=================================================================
+      PHASE 1a BENCHMARK RESULTS: SPEECH COMMANDS v2 (12-CLASS)
+=================================================================
+  Target Dataset               : Speech Commands v2 (12 Classes)
+  Test Samples Evaluated       : 734 held-out samples
+  PyTorch FP32 Top-1 Accuracy  : 90.74%
+  Kiln C99 int8 Top-1 Accuracy : 91.01% (668/734)
+  Quantization Accuracy Delta  : +0.27%
+  FP32 vs C99 Prediction Match : 98.50% agreement
+  Validation Split (selection) : FP32 91.54% / C99 91.68%
+  Int8 Weights ROM             : 38590 B (1024 B of LUT tables)
+  Arena (.bss) RAM             : 1992 B (target < 2048 B)
+  Constant ROM (weights+LUTs)  : 39614 B (target < 40960 B)
+  MACs per inference           : 314,342
+=================================================================
+# exit code: 0
+```
+
+### 9. KWS -- fresh training run (CUDA; documented ~1-point spread)
 
 ```text
 $ python -m examples.kws.train_aug --out <tmp>/kws_qat_weights_repro.pt
 architecture=shipped params=38,590 train=3423 val=733 test=734 device=cuda
-epoch   50/300 | loss 0.3190 | train 99.85% | val 89.77% | best 90.04%
-epoch  100/300 | loss 0.3030 | train 100.00% | val 89.50% | best 90.86%
-epoch  150/300 | loss 0.2996 | train 100.00% | val 90.18% | best 90.86%
-epoch  200/300 | loss 0.2975 | train 100.00% | val 90.45% | best 90.86%
-epoch  250/300 | loss 0.2969 | train 100.00% | val 90.04% | best 90.86%
-epoch  300/300 | loss 0.2968 | train 100.00% | val 89.90% | best 90.86%
-RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accuracy": 90.86, "test_accuracy": 90.05, "test_samples": 734, "seconds": 80.8, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmp79crmofx\\kws_qat_weights_repro.pt"}
+epoch   50/300 | loss 0.3192 | train 99.91% | val 90.31% | best 90.86%
+epoch  100/300 | loss 0.3084 | train 100.00% | val 90.86% | best 91.00%
+epoch  150/300 | loss 0.2994 | train 100.00% | val 91.00% | best 91.54%
+epoch  200/300 | loss 0.2980 | train 100.00% | val 91.27% | best 91.81%
+epoch  250/300 | loss 0.2971 | train 100.00% | val 91.00% | best 91.81%
+epoch  300/300 | loss 0.2969 | train 100.00% | val 91.00% | best 91.81%
+RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accuracy": 91.81, "test_accuracy": 89.51, "test_samples": 734, "seconds": 76.4, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmpczoe0qpn\\kws_qat_weights_repro.pt"}
 # exit code: 0
 ```
 
-### 8. KWS -- the retrained checkpoint through the emitted C
+### 10. KWS -- the retrained checkpoint through the emitted C
 
 ```text
 $ python -m examples.kws.qat_eval --weights <tmp>/kws_qat_weights_repro.pt
-QAT (shipped) checkpoint: C99 int8 89.92% | FP32 90.05%
-  quantization delta : -0.14%
-  checkpoint         : C:\Users\smily\AppData\Local\Temp\tmp79crmofx\kws_qat_weights_repro.pt
+QAT (shipped) checkpoint: C99 int8 89.24% | FP32 89.51%
+  quantization delta : -0.27%
+  checkpoint         : C:\Users\smily\AppData\Local\Temp\tmpczoe0qpn\kws_qat_weights_repro.pt
   params             : 38,590
   evaluated          : 734 held-out samples
 # exit code: 0
 ```
 
-### 9. Hazard -- char n-gram + LogisticRegression baseline (provenance, split, confusion)
+### 11. Hazard -- char n-gram + LogisticRegression baseline (provenance, split, confusion)
 
 ```text
 $ python -m examples.hazard.baseline_eval
@@ -295,7 +343,7 @@ Results saved to C:\Users\smily\Kiln\examples\hazard\baseline_results.json
 # exit code: 0
 ```
 
-### 10. Hazard -- equal-budget showdown (M2.3)
+### 12. Hazard -- equal-budget showdown (M2.3)
 
 ```text
 $ python -m examples.hazard.benchmark
@@ -315,7 +363,7 @@ RESULT {"models": {"Kiln int8 student (emitted C)": {"footprint": "ROM 2,096 B; 
 # exit code: 0
 ```
 
-### 11. Hazard data provenance (manifest-pinned)
+### 13. Hazard data provenance (manifest-pinned)
 
 - teacher model: `meta-llama/llama-3.3-70b-instruct`
 - corpus: 300 synthetic snippets, 6 classes, split seed 1337, token count 96, window 48 B
@@ -328,12 +376,14 @@ RESULT {"models": {"Kiln int8 student (emitted C)": {"footprint": "ROM 2,096 B; 
 
 | check | result | source |
 | :--- | :--- | :--- |
-| tests | 270 passed in 66.44s (0:01:06) | exit 0 |
+| tests | 270 passed in 69.37s (0:01:09) | exit 0 |
 | showcase 1 | model.c 14,656 B, nm -u=['abort'] | gcc exit 0 |
 | showcase 2 | refused (exit 1), file written: False | fail-closed |
 | KWS shipped (734 clips) | QAT (shipped) checkpoint: C99 int8 91.01% \| FP32 90.74% | exit 0 |
 | KWS PTQ baseline | PTQ baseline (dB-domain FP32 training -> quantized C): 50.54% | exit 0 |
-| KWS retrain (CUDA) | {"architecture": "shipped", "epochs": 300, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmp79crmofx\\kws_qat_weights_repro.pt", "parameters": 38590, "seconds": 80.8, "test_accuracy": 90.05, "test_samples": 734, "val_accuracy": 90.86} | eval exit 0 |
+| KWS certificate (audit) | *   Arena (.bss) RAM      :    1,992 bytes / *   Total Constant ROM    :   39,614 bytes / *   Total MAC Operations  :  314,342 ops / *   Accumulator Safety    : Verified int32 safe [-385191, +220602] | exit 0 |
+| KWS Phase 1 table | PyTorch FP32 Top-1 Accuracy  : 90.74% / Kiln C99 int8 Top-1 Accuracy : 91.01% (668/734) / FP32 vs C99 Prediction Match : 98.50% agreement / Arena (.bss) RAM             : 1992 B (target < 2048 B) / MACs per inference           : 314,342 | exit 0 |
+| KWS retrain (CUDA) | {"architecture": "shipped", "epochs": 300, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmpczoe0qpn\\kws_qat_weights_repro.pt", "parameters": 38590, "seconds": 76.4, "test_accuracy": 89.51, "test_samples": 734, "val_accuracy": 91.81} | eval exit 0 |
 | hazard baseline (sklearn) | Test accuracy (n=45):       100.00% / Held-out accuracy (n=60): 100.00% | exit 0 |
 | hazard showdown | Kiln int8 student: test 73.3% / held-out 73.3% | exit 0 |
 | hazard provenance | hazard_corpus.json: OK / held_out_real.json: OK | manifest.json |
