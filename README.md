@@ -182,7 +182,11 @@ accuracy, and the measured numbers say so plainly (frozen test n=45,
 held-out n=60, full table in `EVIDENCE.md` §11–13). The 60 held-out snippets are
 kept out of synthesis and training and are hash-pinned in the data manifest —
 but the manifest does not record who authored them, so "held-out" here means
-"not template-generated", not "externally sourced". The corpus *deliberately* contains dangerous code snippets — that is
+"not template-generated", not "externally sourced". The synthetic portion of
+the corpus was distilled from Meta's Llama 3.3 70B Instruct — **Built with
+Llama**; per §1.b.i of the Llama 3.3 Community License the student trained on
+those outputs is named **Llama-hazard-sniffer** (the frozen build artifacts
+keep their `hazard-sniffer` label). Attribution: see `NOTICE`. The corpus *deliberately* contains dangerous code snippets — that is
 what the model classifies — so read it as labeled data, never as runnable
 advice:
 
@@ -211,7 +215,9 @@ more teacher data with a proportionally larger *real* held-out set.
 | `speech_commands_test_set_v0.02.tar.gz` | 107 MB | no | raw WAVs for the end-to-end audio tests; without it those tests report `skipped` |
 
 The raw archive is a separate download (Speech Commands v0.02 test set) and is expected
-next to the repository root; it is never vendored.
+next to the repository root; it is never vendored. Speech Commands v0.02 (Warden, 2018,
+arXiv:1804.03209), CC BY 4.0; the tracked corpus is a log-mel feature extraction of its
+test archive. Model and dataset attributions: see `NOTICE`.
 
 ## Repository layout
 
@@ -267,7 +273,9 @@ output drawn by `scripts/render_demo_gif.py`, not screen recordings:
 
 * [scripts/demo_showcase1.gif](scripts/demo_showcase1.gif) — the "2KB brain":
   one C file, a clean `gcc -std=c99 -O2 -Wall -Wextra -Werror -pedantic` compile,
-  and `nm -u` showing `abort` as the only unresolved symbol.
+  and `nm -u` showing `abort` as the only unresolved symbol — as measured with
+  gcc 16.2.0, `-O2`, x86-64; other optimization levels or targets can fold loops
+  into `memcpy`/`memset` and change the symbol set.
 * [scripts/demo_showcase2.gif](scripts/demo_showcase2.gif) — the refusal: a model
   whose int32 accumulator genuinely overflows (140,000 MACs at the 127·127
   maximum product) is rejected with exit 1 and *no* C file is written.

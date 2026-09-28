@@ -1,0 +1,28 @@
+Kiln — notices and attributions
+===============================
+
+Kiln itself is MIT-licensed; see LICENSE.
+
+Llama 3.3 (hazard training data)
+--------------------------------
+The synthetic portion of the hazard-detection training corpus
+(examples/hazard/data/hazard_corpus.json) was distilled from Meta's
+Llama 3.3 70B Instruct model via API. Per section 1.b of the
+Llama 3.3 Community License:
+
+    Llama 3.3 is licensed under the Llama 3.3 Community License,
+    Copyright © Meta Platforms, Inc. All Rights Reserved.
+
+Built with Llama. The int8 student trained on those outputs (referred to as
+"hazard-sniffer" in the build artifacts) carries the name Llama-hazard-sniffer
+per section 1.b.i of that license. The license text is available at
+https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/LICENSE
+
+Speech Commands v0.02 (keyword-spotting data)
+---------------------------------------------
+The tracked keyword-spotting corpus (examples/kws/kws_processed_data.pt)
+is a log-mel feature extraction of the Google Speech Commands v0.02 test
+archive:
+
+    Speech Commands v0.02 (Warden, 2018, arXiv:1804.03209), CC BY 4.0
+    (https://creativecommons.org/licenses/by/4.0/).
