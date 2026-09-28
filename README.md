@@ -188,6 +188,23 @@ GIFs are rendered from the same real runs by `scripts/render_demo_gif.py`:
   whose int32 accumulator genuinely overflows (140,000 MACs at the 127·127
   maximum product) is rejected with exit 1 and *no* C file is written.
 
+## What support would buy
+
+* **Real silicon.** The latency figure is a static upper bound, and `kiln link`
+  targets the host because this machine has no cross toolchain (showcase 3
+  skips honestly without `arm-none-eabi-gcc`). A Raspberry Pi Pico and a
+  Cortex-M toolchain turn the certificate's cycle estimate into a *measured*
+  number on a real microcontroller — and close the "not guaranteed (yet)"
+  line above.
+* **Teacher-data budget.** The hazard corpus (300 snippets + 60 real held-out)
+  was distilled from `meta-llama/llama-3.3-70b-instruct` via API calls.
+  Scaling it ~10x — with a proportionally larger *real* held-out set, which is
+  where the 73.3 % int8 student is weakest against the 100 % baseline — is a
+  few dollars of API spend pointed directly at the documented accuracy gap.
+* **A CI runner.** `scripts/reproduce_evidence.py` regenerates all of
+  `EVIDENCE.md` from real runs in a few minutes; on every push, the evidence
+  could never go stale.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
