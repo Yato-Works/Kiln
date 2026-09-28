@@ -87,7 +87,8 @@ Every number below is the verbatim output of a command executed by
 `scripts/reproduce_evidence.py` against this repository on
 {started:%Y-%m-%d %H:%M} ({platform.system()} {platform.release()},
 Python {py}, torch {torch_version}, {gcc_version}).
-Re-run the script to regenerate this file; nothing in it is hand-written.
+Re-run the script to regenerate this file. The numbers are verbatim run output;
+the section headings, the one-liner and the Honest caveats are authored.
 
     python scripts/reproduce_evidence.py
 

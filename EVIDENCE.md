@@ -4,7 +4,8 @@ Every number below is the verbatim output of a command executed by
 `scripts/reproduce_evidence.py` against this repository on
 2026-09-28 17:25 (Windows 10,
 Python 3.11.15, torch 2.5.1+cu121, gcc (Rev3, Built by MSYS2 project) 16.2.0).
-Re-run the script to regenerate this file; nothing in it is hand-written.
+Re-run the script to regenerate this file. The numbers are verbatim run output;
+the section headings, the one-liner and the Honest caveats are authored.
 
     python scripts/reproduce_evidence.py
 

@@ -1,15 +1,30 @@
 # Kiln
 
-**Kiln is the "QEMU of TinyML": a compiler framework that turns a PyTorch model into
-deterministic, zero-malloc, bit-exact C99 for microcontrollers.**
+**Kiln aspires to be the "QEMU of TinyML": a compiler framework that turns a PyTorch
+model into deterministic, zero-malloc, bit-exact C99 for microcontrollers.**
+It targets a seven-operation subset of a frozen IR (embedding lookup, 1-D convolution,
+matmul, add, LUT, max-pool, argmax) — enough for the two reference models below,
+nothing more.
 
 The emitted translation unit is a single `kiln_predict(const uint8_t *input, int32_t length)`
-function plus static tables — no runtime, no interpreter, no `malloc`. Arena and ROM
-footprints are known before you flash, and the generated C is bit-identical to an
-independent Python reference (`kiln.ref`) and to the PyTorch model it came from.
+function plus static tables — no runtime, no interpreter, no `malloc`; the only libc
+symbol the model object references is `abort()` (the contract-violation trap). Arena
+and ROM footprints are known before you flash, and the generated C is bit-identical to
+an independent Python *integer* reference (`kiln.ref`); against the FP32 PyTorch model
+it agrees on 98.50 % of KWS test predictions, not bit-for-bit.
+
+![Showcase 1 — one C file, clean gcc compile, nm -u shows abort only](scripts/demo_showcase1.gif)
+![Showcase 2 — an int32-overflowing model is refused and nothing is written](scripts/demo_showcase2.gif)
+
+In one screen — **what it is**: a compiler that lowers a quantizable PyTorch graph to
+one C file with a static RAM/ROM/MAC certificate; **what is proven**: int32 accumulator
+non-overflow by static interval analysis (fail-closed), bit-exact C-reference
+agreement, zero dynamic allocation; **what is not yet**: real-silicon timing, on-chip
+audio input, residual adds in the frontend.
 
 * **Integer-only semantics** — int8 activations, int32 accumulators, Q31 multiplier +
-  shift requantisation, fixed tie-breaking, no floating point, no data-dependent control flow.
+  shift requantisation, fixed tie-breaking, no floating point, fixed loop bounds,
+  no recursion, no dynamic allocation.
 * **Evidence over adjectives** — every guarantee is a test: differential fuzzing,
   adversarial edge vectors, and bit-exact comparison of gcc-built C against the reference.
 * **Budget certificate** — a static arena/ROM/MAC audit is printed and written next to the C.
@@ -19,9 +34,9 @@ independent Python reference (`kiln.ref`) and to the PyTorch model it came from.
 | Phase | Scope | State |
 | :---: | :--- | :--- |
 | 0 | Compiler core invariants (KIR, differential / edge-case / tie-break fuzzing) | **DONE** |
-| 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** |
+| 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** (raw-PCM path: 24-clip demo; log-mel features off-device) |
 | 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
-| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (hazard only; KWS search not yet available) |
+| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (hazard only; search checks budgets, not int32 safety — see note below) |
 | 4 | Certified trust: `kiln link` (strict compile + link + image measurement + replay) | **IN PROGRESS** |
 | 5-6 | Moonshots, ecosystem | planned |
 
@@ -86,7 +101,10 @@ spec. Both reference specs reproduce the Phase 1 and Phase 2 certificates exactl
 student.
 
 > **Note:** `kiln search` currently only has a reference spec for the hazard
-> example. KWS search is not yet available.
+> example, and its feasibility verdict checks the RAM/ROM budgets **only** — it
+> does not run the int32 interval audit, so a candidate the search reports as
+> feasible can still be refused by `kiln build` (or `compile`/`link`) on
+> accumulator-overflow grounds.
 
 `kiln link` closes that loop on a **real binary** (Phase 4): it compiles `model.c`,
 the declared frontend and a generated replay harness with
@@ -105,7 +123,7 @@ student alike.
 
 | Metric | Value | Contract |
 | :--- | :--- | :--- |
-| int8 C99 test accuracy | **91.01 %** (734 held-out clips) | >= 85 % (asserted) |
+| int8 C99 test accuracy | **91.01 %** (668/734 held-out clips; Wilson 95 % CI 88.7–92.9 %) | >= 85 % (asserted) |
 | FP32 test accuracy | 90.74 % | — |
 | Quantisation delta | +0.27 % (within run-to-run noise) | no accuracy loss |
 | Emitted C vs FP32 predictions | 98.50 % agreement | >= 95 % (asserted) |
@@ -121,10 +139,10 @@ from a different training corpus* — read the comparison as comparable scale,
 not as having surpassed it.
 
 Headline discipline: the table's **91.01 %** is *the shipped checkpoint's*
-number. Retraining with the shipped recipe lands at **≈ 90 %** int8 C —
-measured retrain runs: 90.33, 90.19, 90.05 and 89.37 % across four CUDA runs
-(`EVIDENCE.md` §7–8). Quote ≈ 90 % for "what a fresh training run produces",
-91.01 % for the artifact being compiled.
+number. One fresh retrain with the shipped recipe measured 89.51 % (PyTorch) /
+89.24 % (emitted C) on the test split (`EVIDENCE.md` §9–10) — expect
+**≈ 89–90 %** from a new training run, not 91 %. The int8 figure landing above
+the FP32 figure is run-to-run noise, not a quantization gain.
 
 Two caveats, both documented in `ROADMAP.md`:
 
@@ -132,20 +150,31 @@ Two caveats, both documented in `ROADMAP.md`:
   not bit-stable, so re-running `train_aug` lands within ~1 point of the shipped checkpoint
   (selection therefore uses the validation split, never the test split);
 * 92.2 % (the MLPerf reference) is not reached because the Phase 1 corpus is 4,890 clips
-  instead of ~105 K; training accuracy saturates at 99.85 % while validation plateaus near 91.5 %.
+  instead of ~105 K; training accuracy saturates at 99.85 % while validation plateaus near 91.5 %;
+* data provenance: the corpus is the official Speech Commands v0.02 **test**
+  archive (verified: the tarball holds exactly 4,890 WAVs) re-split randomly with
+  seed 1337. The split is **not speaker-disjoint** — the pipeline never groups by
+  speaker — so the same speaker can appear in train and test, which flatters
+  accuracy relative to a speaker-held-out protocol. MLPerf Tiny trains on ~85 K
+  clips and evaluates on this same 4,890-clip set, so the comparison is a
+  reference point under different data conditions, not a like-for-like score.
 
 ## Phase 2 hazard student — what the numbers do and do not claim
 
 The hazard example proves the *pipeline* end to end — teacher distillation →
 int8 student → single C file → certificate → fail-closed refusal — not
-accuracy, and the measured numbers say so plainly (frozen test n=45, real
-held-out n=60, full table in `EVIDENCE.md`). The corpus *deliberately* contains dangerous code snippets — that is
+accuracy, and the measured numbers say so plainly (frozen test n=45,
+held-out n=60, full table in `EVIDENCE.md` §11–13). The 60 held-out snippets are
+kept out of synthesis and training and are hash-pinned in the data manifest —
+but the manifest does not record who authored them, so "held-out" here means
+"not template-generated", not "externally sourced". The corpus *deliberately* contains dangerous code snippets — that is
 what the model classifies — so read it as labeled data, never as runnable
 advice:
 
 | model | footprint | test (n=45) | held-out (n=60) |
 | :--- | :--- | :--- | :--- |
 | Kiln int8 student (emitted C) | 2,096 B ROM / 1,344 B arena | 73.3 % | 73.3 % |
+| fastText (dim 8, no subwords) | 21.2 KB f32 / 10.2 KB int8 | 77.8 % | 68.3 % |
 | Rules baseline (regex control) | 377 B of source | 86.7 % | 76.7 % |
 | LogisticRegression (char 2-5) | 304 KB f32 — over budget | 97.8 % | 98.3 % |
 
@@ -239,7 +268,7 @@ output drawn by `scripts/render_demo_gif.py`, not screen recordings:
 * **Teacher-data budget.** The hazard corpus (300 snippets + 60 real held-out)
   was distilled from `meta-llama/llama-3.3-70b-instruct` via API calls.
   Scaling it ~10x — with a proportionally larger *real* held-out set, which is
-  where the 73.3 % int8 student is weakest against the 100 % baseline — is a
+  where the 73.3 % int8 student sits far below the char-n-gram baselines (97.8 % in the table above; 100 % for the 13,061-gram count-vectorizer variant, `EVIDENCE.md` §11) — is a
   few dollars of API spend pointed directly at the documented accuracy gap.
 * **A CI runner.** `scripts/reproduce_evidence.py` regenerates all of
   `EVIDENCE.md` from real runs in a few minutes; on every push, the evidence
