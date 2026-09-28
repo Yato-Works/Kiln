@@ -107,7 +107,7 @@ student alike.
 | :--- | :--- | :--- |
 | int8 C99 test accuracy | **91.01 %** (734 held-out clips) | >= 85 % (asserted) |
 | FP32 test accuracy | 90.74 % | — |
-| Quantisation delta | +0.27 % | no accuracy loss |
+| Quantisation delta | +0.27 % (within run-to-run noise) | no accuracy loss |
 | Emitted C vs FP32 predictions | 98.50 % agreement | >= 95 % (asserted) |
 | Arena RAM / total ROM | **1,992 B** / 39,614 B | < 2 KB / < 40 KB (asserted) |
 | Raw PCM → label (C frontend + emitted graph) | 24/24 bit-exact vs reference, 23/24 correct, 24/24 identical to the PyTorch pipeline | spans all 12 classes |
@@ -119,6 +119,12 @@ the C frontend end-to-end, but only on 24 fixed clips. The MLPerf Tiny
 DS-CNN small figure (92.2 %, on a ~105 K-clip corpus) is a *reference point
 from a different training corpus* — read the comparison as comparable scale,
 not as having surpassed it.
+
+Headline discipline: the table's **91.01 %** is *the shipped checkpoint's*
+number. Retraining with the shipped recipe lands at **≈ 90 %** int8 C —
+measured retrain runs: 90.33, 90.19, 90.05 and 89.37 % across four CUDA runs
+(`EVIDENCE.md` §7–8). Quote ≈ 90 % for "what a fresh training run produces",
+91.01 % for the artifact being compiled.
 
 Two caveats, both documented in `ROADMAP.md`:
 
@@ -133,7 +139,9 @@ Two caveats, both documented in `ROADMAP.md`:
 The hazard example proves the *pipeline* end to end — teacher distillation →
 int8 student → single C file → certificate → fail-closed refusal — not
 accuracy, and the measured numbers say so plainly (frozen test n=45, real
-held-out n=60, full table in `EVIDENCE.md`):
+held-out n=60, full table in `EVIDENCE.md`). The corpus *deliberately* contains dangerous code snippets — that is
+what the model classifies — so read it as labeled data, never as runnable
+advice:
 
 | model | footprint | test (n=45) | held-out (n=60) |
 | :--- | :--- | :--- | :--- |
@@ -194,6 +202,9 @@ tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM�
   upper-bound cycle estimate, and `kiln link` targets the host until a cross
   toolchain plus a target profile exist — see Phase 4), and bit-identical
   *training* runs.
+* The PyTorch frontend does not lower residual adds (`a + b`) yet: ADD exists
+  at the KIR level with a tested interval audit (`tests/test_interval.py`),
+  but no shipped example graph uses it.
 
 ## Evidence
 
