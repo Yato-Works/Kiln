@@ -15,10 +15,24 @@ from pathlib import Path
 
 from ..backend.c99.emit_c import write_c
 from ..budget.report import BudgetReport, audit_graph, format_budget_certificate
+from ..ir.sem import INT32_MAX, INT32_MIN
 from .loader import LoadedModel
 from .schema import KilnSpec
 
-__all__ = ("EmittedArtifacts", "emit_spec_artifacts")
+__all__ = ("EmittedArtifacts", "SafetyViolationError", "emit_spec_artifacts")
+
+
+class SafetyViolationError(RuntimeError):
+    """The audited model is unsafe to emit: an accumulator can overflow int32.
+
+    Raised *before* any artifact is written, so a refused build leaves no
+    ``model.c`` behind for someone to flash by accident.  The audit report
+    rides along so the caller can print the certificate that explains why.
+    """
+
+    def __init__(self, message: str, report: BudgetReport) -> None:
+        super().__init__(message)
+        self.report = report
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,10 +57,31 @@ def emit_spec_artifacts(
     alignment: int = 4,
     runtime_header: str | None = "kiln_runtime.h",
 ) -> EmittedArtifacts:
-    """Writes ``model.c``, the certificate and the declared frontend into ``out_dir``."""
-    out_dir.mkdir(parents=True, exist_ok=True)
+    """Writes ``model.c``, the certificate and the declared frontend into ``out_dir``.
+
+    The accumulator safety gate runs first: an int32-overflowing graph or a graph
+    that cannot be interval-audited raises :class:`SafetyViolationError` and
+    nothing is written at all.
+    """
     report = audit_graph(loaded.graph, loaded.weights, alignment=alignment)
 
+    if not report.int32_overflow_free:
+        if report.interval_audit is not None:
+            audit = report.interval_audit
+            raise SafetyViolationError(
+                f"int32 accumulator overflow detected: accumulator range "
+                f"[{audit.min_accum}, {audit.max_accum}] leaves the int32 domain "
+                f"[{INT32_MIN}, {INT32_MAX}]",
+                report,
+            )
+        else:
+            raise SafetyViolationError(
+                "interval boundary propagation could not run on this graph; "
+                "refusing to emit C without accumulator safety proof",
+                report,
+            )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
     model_c = out_dir / "model.c"
     write_c(
         model_c,

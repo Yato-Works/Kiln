@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from ..analysis.interval import IntervalAudit, propagate_intervals
 from ..ir.kir import Graph, OpType
 from ..ir.memory import plan_graph_memory
 from ..ir.plan import MemoryPlan
@@ -22,6 +23,20 @@ class BudgetReport:
     total_ops: int
     estimated_worst_cycles: int
     peak_concurrent_bytes: int
+    interval_audit: IntervalAudit | None = None
+
+    @property
+    def int32_overflow_free(self) -> bool:
+        """No accumulator can overflow int32 -- the safety half of the build gate.
+
+        ``interval_audit`` is ``None`` when interval propagation could not run
+        (a custom or unlowered op, see ``audit_graph``); such a graph has no
+        *verified* overflow freedom, so the gate closes (fail-closed).
+        """
+        return (
+            self.interval_audit is not None
+            and self.interval_audit.int32_overflow_free
+        )
 
 
 def _count_weight_bytes(value: Any) -> int:
@@ -108,6 +123,15 @@ def audit_graph(
 
     estimated_cycles = total_macs * 5 + total_adds * 2 + other_cycles
 
+    # 4. Interval Boundary Propagation (accumulator overflow & saturation safety)
+    interval_audit = None
+    try:
+        interval_audit = propagate_intervals(graph, weights)
+    except Exception:
+        # If interval propagation fails (e.g. incomplete or custom unlowered ops),
+        # keep the audit intact rather than failing the budget calculation.
+        pass
+
     return BudgetReport(
         arena_ram_bytes=arena_ram,
         weights_rom_bytes=weights_rom,
@@ -118,11 +142,25 @@ def audit_graph(
         total_ops=total_ops,
         estimated_worst_cycles=estimated_cycles,
         peak_concurrent_bytes=peak_concurrent,
+        interval_audit=interval_audit,
     )
 
 
 def format_budget_certificate(report: BudgetReport) -> str:
     """Formats the BudgetReport into a C comment block ASCII certificate."""
+    if report.interval_audit is not None:
+        if not report.interval_audit.int32_overflow_free:
+            accum_line = "WARNING: Potential int32 overflow detected"
+        elif report.interval_audit.total_accum_ops > 0:
+            accum_line = (
+                f"Verified int32 safe "
+                f"[{report.interval_audit.min_accum:+d}, {report.interval_audit.max_accum:+d}]"
+            )
+        else:
+            accum_line = "No accumulator ops"
+    else:
+        accum_line = "NOT VERIFIED (interval audit unavailable)"
+
     return f"""/*
  * =========================================================================
  *                  Kiln Model Static Budget Certificate
@@ -139,5 +177,6 @@ def format_budget_certificate(report: BudgetReport) -> str:
  * -------------------------------------------------------------------------
  *   Dynamic Allocation    :        0 bytes (strictly zero-malloc guarantee)
  *   Determinism           : Bit-exact verified (C99 fixed-point integer)
+ *   Accumulator Safety    : {accum_line}
  * =========================================================================
  */"""

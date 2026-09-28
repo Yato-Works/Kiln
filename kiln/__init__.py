@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from . import backend, budget, frontend, ir, link, ref, search, spec
+from . import analysis, backend, budget, frontend, ir, link, ref, search, spec
 
-__all__ = ("backend", "budget", "frontend", "ir", "link", "ref", "search", "spec")
+__all__ = ("analysis", "backend", "budget", "frontend", "ir", "link", "ref", "search", "spec")

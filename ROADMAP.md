@@ -12,7 +12,7 @@
 | **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
 | **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | DONE (M2.5 open) |
 | **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml` + `kiln build` (予算ゲート)、コンパイル時アーキテクチャ探索 `kiln search` (RAM/ROM/容量パレート) 完了; 自動タスク振り分けは未着手 | IN PROGRESS |
-| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` (厳格コンパイル + リンク + イメージ計測 + リプレイ) 完了; 区間境界伝播、残存能力監査 (Linear Probing)、実機ファーム検証は未着手 | IN PROGRESS |
+| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` (厳格コンパイル + リンク + イメージ計測 + リプレイ) 完了、区間境界伝播 M4.2 (`kiln audit --intervals` / 証明書の Accumulator Safety 行) 完了; 残存能力監査 (Linear Probing)、実機ファーム検証は未着手 | IN PROGRESS |
 | **5** | **ムーンショット (Moonshots)** | 核を汚さない実験ブランチでの賭け | 論理ゲート網バックエンド、CBMC/Frama-C 形式検証、決定木/DNF 抽出、オンデバイス整数SGD | EXPERIMENTAL |
 | **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | `qemu-user` クロス検証、仕様書先出し、再現可能ビルド、3コマンドのHello World | FUTURE |
 
@@ -441,8 +441,9 @@ the same graph the reference VM executes.
 
 **Status**: the declarative front half is in place.  `kiln.yaml` + `kiln build`
 (M3.1) turn a task into `model.c` plus a budget certificate behind a hard budget
-gate, and `kiln search` (M3.2) enumerates a declared parameter grid and reports
-the RAM/ROM/capacity Pareto front *without training anything*.
+gate (joined by M4.2's accumulator-safety gate), and `kiln search` (M3.2)
+enumerates a declared parameter grid and reports the RAM/ROM/capacity Pareto front
+*without training anything*.
 自動タスク振り分け (automatic task dispatch) is the remaining Phase 3
 deliverable.
 
@@ -456,7 +457,9 @@ factory asks for them and exporting PyTorch `nn.Module` targets through
 `kiln.frontend.pytorch`.  `kiln build <spec>` then emits `model.c`,
 `budget_certificate.txt` and the declared C frontend files, prints one
 `[BUDGET]` verdict line per limit and returns 1 if any limit is exceeded -- while
-still writing the artifacts, so the failure can be diagnosed.
+still writing the artifacts, so the failure can be diagnosed.  M4.2 added the one
+exception: an int32 accumulator overflow aborts *before* emission, so no artifact
+survives a model that cannot be accumulated safely.
 
 Two checked-in specs pin the pipeline to the earlier certificates:
 
@@ -466,8 +469,9 @@ Two checked-in specs pin the pipeline to the earlier certificates:
 | `examples/kws/kiln.yaml` | the Phase 1 certificate | 1,992 B | 39,614 B | 314,342 |
 
 `tests/test_spec.py` (26 tests) covers the schema, the resolver and both
-reference specs; `tests/test_cli_build.py` (6) covers the budget gate, the
-frontend copy, the soft input-shape check and the full hazard reference build.
+reference specs; `tests/test_cli_build.py` (8) covers the budget gate, the
+frontend copy, the soft input-shape check, the full hazard reference build and the
+two M4.2 overflow-gate tests.
 
 ### 2. M3.2 compile-time architecture search (`kiln search`)
 
@@ -546,9 +550,10 @@ lowering path in `examples/kws/kws_graph.py`.
 ## Phase 4 Progress (2026-09-27)
 
 **Status**: M4.1 (`kiln link`) is done -- the emitted C is compiled, linked,
-measured and replayed, and the zero-malloc claim is now an *observation*.  Interval
-boundary propagation, the linear-probing capability audit and on-device firmware
-verification remain open.
+measured and replayed, and the zero-malloc claim is now an *observation*.  M4.2
+(interval boundary propagation) is done -- the certificate now carries a static
+proof of int32 accumulator safety.  The linear-probing capability audit and
+on-device firmware verification remain open.
 
 ### 1. M4.1 `kiln link`: from certificate to measured image
 
@@ -602,25 +607,112 @@ command line in the error.  A declared frontend file that is missing from the tr
 is skipped (with `kiln build` warning about it), because the model can still be
 linked and measured on its own.
 
-`tests/test_link.py` adds 21 tests: the harness/prediction contract, the uint8 vs
+`tests/test_link.py` adds 22 tests: the harness/prediction contract, the uint8 vs
 int8 input domains, toolchain discovery (`--cc`, `$KILN_CC`, PATH) and its error
 paths, the strict-flag gate, a missing frontend, a compile error surfacing the
-compiler's diagnosis, the budget gate on `kiln link`, and the two bit-exactness
-tests.  The module skips itself when the host has no C compiler, and the
-zero-malloc section reports `unavailable` instead of guessing when binutils are
-absent -- the same "evidence or an explicit unknown" rule the rest of the
-repository follows.
+compiler's diagnosis, the budget gate on `kiln link`, the M4.2 accumulator gate
+(refused before the toolchain is discovered) and the two bit-exactness tests.  The
+module skips itself when the host has no C compiler, and the zero-malloc section
+reports `unavailable` instead of guessing when binutils are absent -- the same
+"evidence or an explicit unknown" rule the rest of the repository follows.
 
-Open in Phase 4: interval boundary propagation (a static proof that the
-accumulators cannot saturate, reported inside the certificate), the linear-probing
-capability audit, and on-device firmware verification -- which needs a cross
-toolchain (`arm-none-eabi-gcc`, absent on this host, so the firmware path stays
-unverified) plus real hardware.  `kiln link` already walks one code path for both:
-the compiler is discovered through `--cc`/`$KILN_CC`/PATH, so a cross build becomes
-a matter of a target profile (linking script, `-mcpu`, memory map) rather than new
-plumbing.
+### 2. M4.2 interval boundary propagation: from claim to proof
 
+Phase 1-3 *asserted* that the int32 accumulator never overflows; M4.2 proves it.
+`kiln/analysis/interval.py` runs Interval Boundary Propagation (IBP) over the
+resolved graph: every tensor gets an inclusive `[lo, hi]` value interval, every
+accumulating op (CONV1D, MATMUL, ADD) gets an accumulator interval, and the
+audit reports whether both stay inside their contracts.
 
+The propagation is exact where it matters and conservative where it must be:
 
+* **Input bounds** come from the declared dtype (`UINT8` -> `[0, 255]`,
+  `INT8` -> `[-128, 127]`) or explicit per-tensor overrides.
+* **Weight bounds** use the sign-split trick: for each output filter/row,
+  `acc_lo = x.lo * pos_sum + x.hi * neg_sum` and
+  `acc_hi = x.hi * pos_sum + x.lo * neg_sum`, where `pos_sum`/`neg_sum` are the
+  sums of the positive and non-positive weights -- the standard interval-arithmetic
+  dot-product bound, computed per row and min/max-ed across rows.
+* **Requantization** (`requantize(a, m, s)` = SRDHM + rounding divide) is strictly
+  monotonic in `a`, which was verified empirically over 100K+ random triples in
+  development, so evaluating it at the accumulator endpoints gives the *exact*
+  output interval -- not an approximation.
+* **Saturation** is detected *pre-clamp*: if the preclamp value falls below
+  `INT8_MIN` or above `INT8_MAX`, the node is flagged `saturates=True` even
+  though the emitted output is clamped.  This is reported per node, so a model
+  whose worst case touches the clamp is visible rather than silently accepted.
+* **LUT** nodes slice the 256-entry table at `idx = value - INT8_MIN` for the
+  input range and take the min/max of the slice; **MAXPOOL1D** preserves its
+  input interval; **ARGMAX** reports the index space `[0, num_elements - 1]`.
 
+The results reach every surface a user already touches:
+
+* the **certificate** gains one line --
+  `Accumulator Safety : Verified int32 safe [-67640, +61845]` (or a WARNING when
+  the bound fails) -- written to `budget_certificate.txt` by `kiln build`, and a
+  hard gate for `kiln build` / `kiln compile` / `kiln link` (see below);
+* `kiln audit --intervals` prints the full report (per-tensor bounds and the
+  per-node accumulator/preclamp/saturation table);
+* `kiln audit --json` ships an `interval_analysis` object
+  (`int32_overflow_free`, `total_accum_ops`, `saturating_ops`, `min_accum`,
+  `max_accum`, `tensor_intervals`, `node_audits`);
+* `BudgetReport.interval_audit` carries the structured
+  `IntervalAudit` for programmatic consumers.
+
+An overflow is *reported* by the audit and *enforced* by the build.  Propagation
+itself never raises: a synthetic 200K-weight matmul whose bound reaches
+3,225,800,000 (> `INT32_MAX`) sets `int32_overflow_free=False` while the walk
+continues (the requantize helpers clamp the accumulator into range first, so the
+audit cannot itself crash on the very case it exists to catch).  `audit_graph`
+wraps the whole analysis in a best-effort guard, so a custom graph with missing
+quant parameters degrades to `interval_audit=None` instead of failing the budget
+calculation.
+
+`kiln build` and `kiln compile` turn that flag into a hard gate.  When
+`BudgetReport.int32_overflow_free` is False, `emit_spec_artifacts` raises
+`SafetyViolationError` *before the first byte is written*; the CLI prints the
+certificate (whose `Accumulator Safety` line carries the WARNING), prints
+`[SAFETY VIOLATION]` on stderr and exits 1.  A refused build therefore leaves no
+`model.c` for someone to flash by accident -- the deliberate exception to the
+"artifacts stay for diagnosis" rule that budget violations follow, because a
+budget violation is a trade-off to revisit while a miscompiled accumulator is not.
+`kiln link` inherits the gate (it emits through the same function), and
+`kiln audit` stays read-only: reporting is its whole job.  `kiln search` is the one
+surface that does not consult the bound yet -- it gates candidates on RAM/ROM/MACs
+alone, so an architecture that would overflow still reports as feasible and is only
+refused at build time (a recorded follow-up, not a Phase 4 deliverable).
+
+Measured on the two in-tree models, both int32-safe:
+
+| Spec | Accumulating ops | Accumulator range | int32 safe | Saturating (worst case) |
+| :--- | ---: | :---: | :---: | ---: |
+| `examples/hazard/kiln.yaml` | 1 | `[-67,640, +61,845]` | yes | 1 / 1 |
+| `examples/kws/kiln.yaml` | 5 | `[-385,191, +220,602]` | yes | 5 / 5 |
+
+The KWS `5 / 5` is the conservative worst case (full-range int8 inputs through
+every conv), reported rather than hidden: the clamp exists precisely because the
+worst case can reach it, and the certificate states where.  Both numbers come
+from `python -m kiln audit <spec> --intervals`.
+
+`tests/test_interval.py` adds 7 tests: interval algebra invariants, int8/int32
+bounds, EMBEDDING+MATMUL propagation with exact requantized endpoints,
+CONV1D+LUT+MAXPOOL1D+ADD chains, saturation detection, int32 overflow detection
+on the synthetic matmul, and both real models pinned to their measured ranges.
+`tests/test_budget.py` and `tests/test_cli.py` assert the certificate line, the
+`--intervals` output and the `interval_analysis` JSON payload.  The gate itself is
+pinned by four more tests: `tests/test_cli_build.py` checks that the 200K-weight
+spec makes `kiln build` exit 1 while writing neither `model.c` nor
+`budget_certificate.txt` (and that `emit_spec_artifacts` raises
+`SafetyViolationError` without even creating the output directory);
+`tests/test_link.py` checks that `kiln link` is refused for the same spec before a
+compiler is even looked for; and `tests/test_cli.py` compiles a 133,200-tap
+`nn.Conv1d` whose bound reaches 2,148,382,800 to check that `kiln compile` refuses
+it with no C emitted.
+
+Open in Phase 4: the linear-probing capability audit and on-device firmware
+verification -- which needs a cross toolchain (`arm-none-eabi-gcc`, absent on
+this host, so the firmware path stays unverified) plus real hardware.  `kiln
+link` already walks one code path for both: the compiler is discovered through
+`--cc`/`$KILN_CC`/PATH, so a cross build becomes a matter of a target profile
+(linking script, `-mcpu`, memory map) rather than new plumbing.
 

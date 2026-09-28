@@ -1,0 +1,135 @@
+{
+  "baseline": "char_ngram_2_5_logistic_regression",
+  "vectorizer_vocab_size": 13061,
+  "train_val_samples": 255,
+  "test_samples": 45,
+  "held_out_samples": 60,
+  "test_accuracy": 1.0,
+  "held_out_accuracy": 1.0,
+  "test_confusion_matrix": [
+    [
+      5,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      5,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      7,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      14,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      6,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      8
+    ]
+  ],
+  "held_out_confusion_matrix": [
+    [
+      10,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      10,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      10,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      10,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      10,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      10
+    ]
+  ],
+  "per_class_test_accuracy": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "per_class_held_out_accuracy": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "class_names": [
+    "benign",
+    "dynamic_exec",
+    "deserialization",
+    "shell_injection",
+    "tempfile",
+    "unsafe_validation"
+  ],
+  "kiln_int8_student_test": 73.3,
+  "kiln_int8_student_held_out": 73.3
+}

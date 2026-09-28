@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from kiln.cli import main
+from kiln.spec import load_spec, resolve_model_graph
+from kiln.spec.pipeline import SafetyViolationError, emit_spec_artifacts
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -118,3 +120,39 @@ def test_build_hazard_reference_spec(
     captured = capsys.readouterr()
     assert "[SUCCESS] Built hazard-sniffer" in captured.out
     assert "[BUDGET] arena RAM" in captured.out
+
+
+def test_build_int32_overflow_aborts_and_fails(
+    overflow_spec_factory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An overflowing model fails the build *and* leaves no artifacts to flash."""
+    spec_path = overflow_spec_factory()
+    out_dir = spec_path.parent / "build"
+
+    ret = main(["build", str(spec_path), "-o", str(out_dir)])
+
+    assert ret == 1
+    captured = capsys.readouterr()
+    assert "[SAFETY VIOLATION]" in captured.err
+    assert "int32 accumulator overflow detected" in captured.err
+    assert "no artifacts written" in captured.err
+    # The certificate still explains the refusal...
+    assert "WARNING: Potential int32 overflow detected" in captured.out
+    # ...but neither artifact survived.
+    assert not (out_dir / "model.c").exists()
+    assert not (out_dir / "budget_certificate.txt").exists()
+
+
+def test_emit_spec_artifacts_refuses_overflow_before_writing(
+    overflow_spec_factory, temp_dir: Path
+) -> None:
+    """The gate lives in the emitter, so ``kiln link`` inherits it too."""
+    spec = load_spec(overflow_spec_factory())
+    loaded = resolve_model_graph(spec)
+    out_dir = temp_dir / "emitted"
+
+    with pytest.raises(SafetyViolationError, match="int32 accumulator overflow detected") as exc:
+        emit_spec_artifacts(spec, loaded, out_dir)
+
+    assert exc.value.report.int32_overflow_free is False
+    assert not out_dir.exists()               # not even an empty directory

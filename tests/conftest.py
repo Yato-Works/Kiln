@@ -122,3 +122,70 @@ def toy_spec_factory(toy_project: Path) -> Callable[..., Path]:
         return path
 
     return _write
+
+
+#: A spec project whose MATMUL cannot fit an int32 accumulator: 200,000 int8
+#: weights of 127 times the int8 input domain [-128, 127] reaches 3,225,800,000 >
+#: INT32_MAX -- the same failure ``tests/test_interval.py`` pins down at the
+#: propagation layer, reused here to exercise the *gate* the build puts on it.
+#: The declared budget is deliberately huge so only the safety gate can fail.
+OVERFLOW_MODEL_SOURCE = '''"""Synthetic kiln spec fixture with a guaranteed int32 accumulator overflow."""
+
+from __future__ import annotations
+
+from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
+
+COUNT = 200000
+
+
+def build(weights_path: str | None = None) -> tuple[Graph, dict]:
+    """Graph + weights factory honouring the spec loader's `weights_path` kwarg."""
+    tensors = {
+        "x": TensorDesc("x", shape=(1, COUNT), dtype=DType.INT8),
+        "logits": TensorDesc(
+            "logits",
+            shape=(1, 1),
+            dtype=DType.INT8,
+            quant=QuantParam(multiplier=1073741824, shift=1),
+        ),
+        "label": TensorDesc("label", shape=(), dtype=DType.INT8),
+    }
+    nodes = [
+        Node(
+            OpType.MATMUL,
+            "fc_overflow",
+            inputs=["x"],
+            outputs=["logits"],
+            attrs={"weight": "w_fc"},
+        ),
+        Node(OpType.ARGMAX, "argmax", inputs=["logits"], outputs=["label"]),
+    ]
+    graph = Graph(inputs=["x"], outputs=["label"], nodes=nodes, tensors=tensors)
+    weights = {"w_fc": [[127 for _ in range(COUNT)]]}
+    return graph, weights
+'''
+
+
+@pytest.fixture
+def overflow_spec_factory(temp_dir: Path) -> Callable[[], Path]:
+    """Writes the overflowing ``kiln.yaml`` project and returns its path."""
+
+    def _write() -> Path:
+        project = temp_dir / "overflow"
+        project.mkdir(parents=True, exist_ok=True)
+        (project / "overflow_fixture.py").write_text(OVERFLOW_MODEL_SOURCE, encoding="utf-8")
+        spec = {
+            "name": "overflow-task",
+            "version": 1,
+            "task": "classification",
+            "domain": "general",
+            "input": {"name": "x", "shape": [1, 200000], "dtype": "int8"},
+            "output": {"name": "label", "classes": ["c0"]},
+            "model": {"entry_point": "overflow_fixture.py:build", "weights": None},
+            "budget": {"ram_arena_max_bytes": 10000000, "rom_total_max_bytes": 10000000},
+        }
+        path = project / "kiln.yaml"
+        path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+        return path
+
+    return _write

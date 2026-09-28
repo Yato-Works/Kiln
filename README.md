@@ -21,7 +21,7 @@ independent Python reference (`kiln.ref`) and to the PyTorch model it came from.
 | 0 | Compiler core invariants (KIR, differential / edge-case / tie-break fuzzing) | **DONE** |
 | 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** |
 | 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
-| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** |
+| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (hazard only; KWS search not yet available) |
 | 4 | Certified trust: `kiln link` (strict compile + link + image measurement + replay) | **IN PROGRESS** |
 | 5-6 | Moonshots, ecosystem | planned |
 
@@ -41,7 +41,7 @@ Three commands — no dataset download needed:
 ```bash
 python -m kiln ops                            # 1. the 7 IR operations (the whole instruction set)
 python -m kiln audit examples/kws/model.py    # 2. static footprint certificate (add --json for machines)
-python -m pytest tests/ -q                    # 3. every guarantee (257 tests, ~2 min)
+python -m pytest tests/ -q                    # 3. every guarantee (all tests, ~2 min)
 ```
 
 The Phase 4 link tests compile and run C, so they skip themselves when the host
@@ -57,7 +57,10 @@ gcc -std=c99 -O2 -Wall -Wextra -Werror -pedantic -c kws_model.c -o kws_model.o
 `--runtime-header None` emits a self-contained translation unit; the default
 (`kiln_runtime.h`) is for projects that ship their own shim. `kiln verify <model.py>`
 adds gcc-based differential fuzzing against the Python reference, and `kiln audit --json`
-returns the same certificate as structured data.
+returns the same certificate as structured data. `kiln audit --intervals` prints the
+Interval Boundary Propagation report — per-tensor value bounds and per-node
+accumulator/saturation ranges — that also lands in the certificate's
+`Accumulator Safety` line as a static proof of int32 non-overflow.
 
 ### Declarative builds (Phase 3)
 
@@ -65,19 +68,25 @@ A task is a YAML spec, and the budget gate is part of the build:
 
 ```bash
 python -m kiln build examples/hazard/kiln.yaml            # kiln.yaml -> model.c + budget_certificate.txt
-python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front
+python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front (hazard only)
 python -m kiln link examples/hazard/kiln.yaml --run       # strict compile + link + image measurement + replay
 ```
 
 `kiln build` resolves `model.entry_point`, audits the resolved graph against the
 spec's `budget:` and exits non-zero if a limit is exceeded (the artifacts are still
-written, so the failure can be diagnosed). `kiln search` enumerates a grid of
+written, so the failure can be diagnosed). The one failure that writes *nothing* is
+an int32 accumulator overflow: the certificate's `Accumulator Safety` proof is a
+hard gate in `build`, `compile` and `link`, so a model that cannot be accumulated
+safely never produces a `model.c` to flash by accident. `kiln search` enumerates a grid of
 factory parameters and audits **every candidate at compile time** — a footprint
 depends on shapes and weight extents, never on weight values, so a search needs no
 training run — then writes `search_report.md` and `search_results.csv` next to the
 spec. Both reference specs reproduce the Phase 1 and Phase 2 certificates exactly:
 1,992 B / 39,614 B / 314,342 MACs for KWS and 1,344 B / 2,096 B for the hazard
 student.
+
+> **Note:** `kiln search` currently only has a reference spec for the hazard
+> example. KWS search is not yet available.
 
 `kiln link` closes that loop on a **real binary** (Phase 4): it compiles `model.c`,
 the declared frontend and a generated replay harness with
@@ -129,6 +138,7 @@ next to the repository root; it is never vendored.
 ```
 kiln/ir/         KIR: ops, dtypes, quantisation params, validation, best-fit arena allocator
 kiln/frontend/   PyTorch -> KIR lowering
+kiln/analysis/   interval boundary propagation: int32 accumulator + saturation audit
 kiln/budget/     static arena/ROM/MAC audit and certificate formatting
 kiln/backend/    C99 emitter (one static arena, zero-malloc)
 kiln/ref/        independent integer reference interpreter (the oracle)
@@ -156,6 +166,27 @@ tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM�
   upper-bound cycle estimate, and `kiln link` targets the host until a cross
   toolchain plus a target profile exist — see Phase 4), and bit-identical
   *training* runs.
+
+## Evidence
+
+Every number in this README is reproduced by a single script — nothing is
+hand-typed:
+
+```bash
+python scripts/reproduce_evidence.py    # re-runs every command, writes EVIDENCE.md
+```
+
+`EVIDENCE.md` quotes the verbatim stdout of each run (the test suite, `kiln build`,
+`gcc -Werror -pedantic` + `nm -u`, the safety refusal, the KWS and hazard
+evaluations, the training repro and the data-provenance manifest). The showcase
+GIFs are rendered from the same real runs by `scripts/render_demo_gif.py`:
+
+* [scripts/demo_showcase1.gif](scripts/demo_showcase1.gif) — the "2KB brain":
+  one C file, a clean `gcc -std=c99 -O2 -Wall -Wextra -Werror -pedantic` compile,
+  and `nm -u` showing `abort` as the only unresolved symbol.
+* [scripts/demo_showcase2.gif](scripts/demo_showcase2.gif) — the refusal: a model
+  whose int32 accumulator genuinely overflows (140,000 MACs at the 127·127
+  maximum product) is rejected with exit 1 and *no* C file is written.
 
 ## License
 

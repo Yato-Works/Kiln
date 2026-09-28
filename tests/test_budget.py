@@ -65,6 +65,12 @@ def test_budget_report_calculations() -> None:
     assert "Kiln Model Static Budget Certificate" in cert
     assert "160 ops" in cert
     assert "strictly zero-malloc guarantee" in cert
+    assert "Accumulator Safety" in cert
+
+    # Interval Boundary Propagation audit is attached to the report
+    assert report.interval_audit is not None
+    assert report.interval_audit.int32_overflow_free is True
+    assert report.interval_audit.total_accum_ops == 3  # CONV1D + ADD + MATMUL
 
 
 def test_emit_c_contains_certificate() -> None:

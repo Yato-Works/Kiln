@@ -33,6 +33,7 @@ from kiln.link import (
 )
 from kiln.ref.ref import run_ref
 from kiln.spec import load_spec, resolve_model_graph
+from kiln.spec.pipeline import SafetyViolationError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HAZARD_SPEC = REPO_ROOT / "examples" / "hazard" / "kiln.yaml"
@@ -154,6 +155,33 @@ def test_detect_toolchain_rejects_a_missing_compiler() -> None:
 
 
 # --------------------------------------------------------- the linked build
+
+
+def test_link_refuses_int32_overflow(
+    overflow_spec_factory, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An overflowing spec is refused by the emitter, so nothing is ever linked.
+
+    No compiler is required for this refusal: emission (and therefore the gate)
+    runs before the toolchain is even discovered.
+    """
+    spec_path = overflow_spec_factory()
+    spec = load_spec(spec_path)
+    out_dir = temp_dir / "link"
+
+    with pytest.raises(SafetyViolationError, match="int32 accumulator overflow detected"):
+        link_spec(spec, out_dir=out_dir, run=True)
+
+    assert not (out_dir / "model.c").exists()
+    assert not (out_dir / "harness.c").exists()
+
+    # The CLI reports the same refusal and exits non-zero.
+    ret = main(["link", str(spec_path), "-o", str(out_dir)])
+
+    assert ret == 1
+    captured = capsys.readouterr()
+    assert "[SAFETY VIOLATION] Link refused" in captured.err
+    assert "int32 accumulator overflow detected" in captured.err
 
 
 @requires_compiler

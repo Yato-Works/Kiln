@@ -81,6 +81,41 @@ def test_cli_compile_runtime_header_none_is_self_contained(
     assert "#include <stdint.h>" in content
 
 
+def test_cli_compile_refuses_int32_overflow(
+    temp_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An overflowing graph is refused before any C is written (the compile gate).
+
+    133,200 int8 weights of 127 times an int8 input domain of 127 reaches
+    2,148,382,800 > INT32_MAX, so the *safety* gate -- not the budget checks,
+    which ``compile`` does not run -- must stop the emission.
+    """
+    kernel = 133_200
+    code = f"""
+import torch
+import torch.nn as nn
+
+conv = nn.Conv1d(1, 1, kernel_size={kernel}, bias=False)
+nn.init.constant_(conv.weight, 1.0)
+
+model = nn.Sequential(conv)
+dummy_input = torch.zeros(1, {kernel}, dtype=torch.uint8)
+"""
+    model_path = temp_dir / "overflow_model.py"
+    model_path.write_text(code, encoding="utf-8")
+    out_c = temp_dir / "overflow.c"
+
+    ret = main(["compile", str(model_path), "-o", str(out_c)])
+
+    assert ret == 1
+    captured = capsys.readouterr()
+    assert "[SAFETY VIOLATION]" in captured.err
+    assert "int32 accumulator overflow detected" in captured.err
+    assert "no C emitted" in captured.err
+    assert "WARNING: Potential int32 overflow detected" in captured.out
+    assert not out_c.exists()
+
+
 def test_cli_compile_runtime_header_is_forwarded(
     sample_model_file: Path, temp_dir: Path
 ) -> None:
@@ -99,6 +134,17 @@ def test_cli_audit_text(sample_model_file: Path, capsys: pytest.CaptureFixture[s
     captured = capsys.readouterr()
     assert "Kiln Model Static Budget Certificate" in captured.out
     assert "Arena (.bss) RAM" in captured.out
+    assert "Accumulator Safety" in captured.out
+
+
+def test_cli_audit_intervals(sample_model_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`--intervals` adds the detailed Interval Boundary Propagation report."""
+    ret = main(["audit", str(sample_model_file), "--intervals"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert "Static Interval Boundary Analysis" in captured.out
+    assert "Accumulator overflow safety" in captured.out
+    assert "Tensor Value Bounds" in captured.out
 
 
 def test_cli_audit_json(sample_model_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -111,6 +157,12 @@ def test_cli_audit_json(sample_model_file: Path, capsys: pytest.CaptureFixture[s
     assert "total_macs" in data
     assert data["dynamic_allocation_bytes"] == 0
     assert data["deterministic"] is True
+    # Interval Boundary Propagation results ship in the JSON payload
+    intervals = data["interval_analysis"]
+    assert intervals["int32_overflow_free"] is True
+    assert intervals["total_accum_ops"] == 1  # the Linear/matmul layer
+    assert isinstance(intervals["tensor_intervals"], dict)
+    assert isinstance(intervals["node_audits"], dict)
 
 
 @pytest.mark.skipif(not _has_gcc(), reason="gcc required for cli verify test")

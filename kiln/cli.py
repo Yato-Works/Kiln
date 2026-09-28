@@ -20,7 +20,7 @@ from .link import ToolchainError, budget_violations, format_link_report, link_sp
 from .search import SearchRow, run_search
 from .search.report import format_search_report, search_results_csv
 from .spec import load_spec, resolve_model_graph
-from .spec.pipeline import emit_spec_artifacts
+from .spec.pipeline import SafetyViolationError, emit_spec_artifacts
 
 
 # ANSI Color formatting
@@ -108,6 +108,27 @@ def cmd_compile(args: argparse.Namespace) -> int:
         model, dummy_input = _load_model_and_input(args.model_path, args.entry_point)
         graph, weights = export_to_kir(model, dummy_input)
 
+        # The safety gate runs before anything is written: an int32 accumulator
+        # overflow is a miscompile, not a budgeting preference, so no C is
+        # emitted at all. A graph that cannot be interval-audited also fails.
+        report = audit_graph(graph, weights, alignment=args.alignment)
+        cert = format_budget_certificate(report)
+
+        if not report.int32_overflow_free:
+            print(_color(cert, Style.CYAN))
+            if report.interval_audit is not None:
+                msg = (
+                    f"[SAFETY VIOLATION] int32 accumulator overflow detected in {args.model_path}; "
+                    f"compilation aborted, no C emitted"
+                )
+            else:
+                msg = (
+                    f"[SAFETY VIOLATION] interval boundary propagation could not run on {args.model_path}; "
+                    f"refusing to emit C without accumulator safety proof"
+                )
+            print(_color(msg, Style.BOLD + Style.RED), file=sys.stderr)
+            return 1
+
         out_path = Path(args.output) if args.output else Path("model.c")
         # `--runtime-header None` (or an empty string) means "emit a
         # self-contained translation unit", mirroring emit_c's
@@ -117,9 +138,6 @@ def cmd_compile(args: argparse.Namespace) -> int:
         if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
             runtime_header = None
         write_c(out_path, graph, weights, alignment=args.alignment, runtime_header=runtime_header)
-
-        report = audit_graph(graph, weights, alignment=args.alignment)
-        cert = format_budget_certificate(report)
 
         print(_color(cert, Style.CYAN))
         print(
@@ -163,9 +181,24 @@ def cmd_build(args: argparse.Namespace) -> int:
         if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
             runtime_header = None
 
-        emitted = emit_spec_artifacts(
-            task, loaded, out_dir, alignment=args.alignment, runtime_header=runtime_header
-        )
+        try:
+            emitted = emit_spec_artifacts(
+                task, loaded, out_dir, alignment=args.alignment, runtime_header=runtime_header
+            )
+        except SafetyViolationError as exc:
+            # The gate fires before anything is written (see kiln.spec.pipeline),
+            # so there is no model.c to flash by accident.  Print the certificate
+            # that explains the refusal and fail the build.
+            print(_color(format_budget_certificate(exc.report), Style.CYAN))
+            print(
+                _color(
+                    f"[SAFETY VIOLATION] {task.name}: {exc}; build aborted, no artifacts written",
+                    Style.BOLD + Style.RED,
+                ),
+                file=sys.stderr,
+            )
+            return 1
+
         report = emitted.report
         out_c = emitted.model_c
         cert = emitted.certificate
@@ -298,6 +331,13 @@ def cmd_link(args: argparse.Namespace) -> int:
     except ToolchainError as e:
         print(_color(f"[ERROR] Link failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
         return 1
+    except SafetyViolationError as e:
+        # Nothing was emitted, so there is nothing to link; say why explicitly.
+        print(
+            _color(f"[SAFETY VIOLATION] Link refused: {e}", Style.BOLD + Style.RED),
+            file=sys.stderr,
+        )
+        return 1
     except Exception as e:
         print(_color(f"[ERROR] Link failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
         return 1
@@ -326,12 +366,20 @@ def cmd_link(args: argparse.Namespace) -> int:
 
 def cmd_audit(args: argparse.Namespace) -> int:
     try:
-        model, dummy_input = _load_model_and_input(args.model_path)
-        graph, weights = export_to_kir(model, dummy_input)
+        model_str = args.model_path
+        p = Path(model_str)
+        if p.suffix.lower() in (".yaml", ".yml"):
+            spec = load_spec(p)
+            loaded = resolve_model_graph(spec)
+            graph, weights = loaded.graph, loaded.weights
+        else:
+            model, dummy_input = _load_model_and_input(model_str)
+            graph, weights = export_to_kir(model, dummy_input)
+
         report = audit_graph(graph, weights, alignment=args.alignment)
 
         if args.json:
-            payload = {
+            payload: dict[str, Any] = {
                 "arena_ram_bytes": report.arena_ram_bytes,
                 "peak_concurrent_bytes": report.peak_concurrent_bytes,
                 "weights_rom_bytes": report.weights_rom_bytes,
@@ -344,14 +392,58 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 "dynamic_allocation_bytes": 0,
                 "deterministic": True,
             }
+            if report.interval_audit is not None:
+                ia = report.interval_audit
+                payload["interval_analysis"] = {
+                    "int32_overflow_free": ia.int32_overflow_free,
+                    "total_accum_ops": ia.total_accum_ops,
+                    "saturating_ops": ia.saturating_ops,
+                    "min_accum": ia.min_accum,
+                    "max_accum": ia.max_accum,
+                    "tensor_intervals": {
+                        t_name: {"lo": inv.lo, "hi": inv.hi}
+                        for t_name, inv in ia.tensor_intervals.items()
+                    },
+                    "node_audits": {
+                        n_name: {
+                            "op_type": na.op_type.value,
+                            "accum_lo": na.accum_lo,
+                            "accum_hi": na.accum_hi,
+                            "accum_fits_int32": na.accum_fits_int32,
+                            "preclamp_lo": na.preclamp_lo,
+                            "preclamp_hi": na.preclamp_hi,
+                            "saturates": na.saturates,
+                        }
+                        for n_name, na in ia.node_audits.items()
+                    },
+                }
             print(json.dumps(payload, indent=2))
         else:
             cert = format_budget_certificate(report)
             print(_color(cert, Style.CYAN))
+            if getattr(args, "intervals", False) and report.interval_audit is not None:
+                ia = report.interval_audit
+                print("\n" + _color("--- Static Interval Boundary Analysis ---", Style.BOLD + Style.GREEN))
+                print(f"Accumulator overflow safety : {'SAFE (int32)' if ia.int32_overflow_free else 'OVERFLOW DETECTED'}")
+                print(f"Accumulator value range    : [{ia.min_accum:+d}, {ia.max_accum:+d}]")
+                print(f"Saturating requantize ops  : {ia.saturating_ops} / {ia.total_accum_ops}")
+                print("\nTensor Value Bounds:")
+                for t_name, inv in ia.tensor_intervals.items():
+                    print(f"  {t_name:<20} : [{inv.lo:>5}, {inv.hi:>5}]")
+                print("\nAccumulator / Requantize Details:")
+                for n_name, na in ia.node_audits.items():
+                    if na.accum_lo is not None:
+                        sat_flag = " (SATURATES)" if na.saturates else ""
+                        print(
+                            f"  {n_name:<16} ({na.op_type.value:<8}) : "
+                            f"acc=[{na.accum_lo:>10}, {na.accum_hi:>10}], "
+                            f"preclamp=[{na.preclamp_lo:>6}, {na.preclamp_hi:>6}]{sat_flag}"
+                        )
         return 0
     except Exception as e:
         print(_color(f"[ERROR] Audit failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
         return 1
+
 
 
 def _generate_test_samples(input_len: int, num_samples: int, is_int8: bool = False) -> list[list[int]]:
@@ -519,7 +611,7 @@ def create_parser() -> argparse.ArgumentParser:
     # search (compile-time architecture exploration over a `search:` grid)
     p_search = subparsers.add_parser(
         "search",
-        help="Enumerate a kiln.yaml search grid and report the RAM/ROM/capacity Pareto front",
+        help="Enumerate a kiln.yaml search grid and report the RAM/ROM/capacity Pareto front (supported: hazard example)",
     )
     p_search.add_argument("spec", help="Path to the kiln.yaml task specification (needs a search: block)")
     p_search.add_argument("-o", "--output", default=None, help="Output directory for the report (default: <spec dir>/search)")
@@ -542,6 +634,8 @@ def create_parser() -> argparse.ArgumentParser:
     p_audit.add_argument("model_path", help="Path to PyTorch model .py file")
     p_audit.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
     p_audit.add_argument("--json", action="store_true", help="Output report as structured JSON")
+    p_audit.add_argument("--intervals", action="store_true", help="Display static interval boundary propagation analysis")
+
 
     # verify
     p_verify = subparsers.add_parser("verify", help="Verify model via GCC build & differential testing")
