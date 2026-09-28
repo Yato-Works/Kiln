@@ -16,11 +16,26 @@ it agrees on 98.50 % of KWS test predictions, not bit-for-bit.
 ![Showcase 1 — one C file, clean gcc compile, nm -u shows abort only](scripts/demo_showcase1.gif)
 ![Showcase 2 — an int32-overflowing model is refused and nothing is written](scripts/demo_showcase2.gif)
 
+Re-rendered terminal frames of real runs (verbatim captured output), not screen recordings.
+
 In one screen — **what it is**: a compiler that lowers a quantizable PyTorch graph to
-one C file with a static RAM/ROM/MAC certificate; **what is proven**: int32 accumulator
-non-overflow by static interval analysis (fail-closed), bit-exact C-reference
-agreement, zero dynamic allocation; **what is not yet**: real-silicon timing, on-chip
-audio input, residual adds in the frontend.
+one C file with a static RAM/ROM/MAC certificate; **what is not yet**: real-silicon
+timing, on-chip audio input, residual adds in the frontend. What is guaranteed rests
+on three different kinds of evidence:
+
+* **checked by static analysis** — the int32 accumulators cannot overflow: the
+  interval propagator *assumes the full type domain as its input* (every value an
+  int8 can hold), so the bound holds for any input the C will ever receive;
+* **checked by tests** — the emitted C is bit-exact against the independent integer
+  reference (`kiln.ref`) on differential fuzzing, adversarial edge vectors and the
+  fixed splits;
+* **observed on a linked binary** — the model object references no allocation entry
+  point, and its only undefined symbol is `abort()` (`kiln link` reads this from
+  the real image).
+
+The interval analysis itself is a tested Python static analysis, not a
+machine-verified formal proof (no CBMC/SMT backend) — its guarantee is exactly as
+strong as its tests.
 
 * **Integer-only semantics** — int8 activations, int32 accumulators, Q31 multiplier +
   shift requantisation, fixed tie-breaking, no floating point, fixed loop bounds,
