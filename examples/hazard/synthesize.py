@@ -209,7 +209,7 @@ def query_openrouter_snippets(
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/smily/Kiln",
+        "HTTP-Referer": "https://github.com/Yato-Works/Kiln",
         "X-Title": "Kiln Hazard Distillation",
     }
     prompt = f"""Generate {count} distinct, realistic Python single-line code snippets for vulnerability class: "{cls_name}".

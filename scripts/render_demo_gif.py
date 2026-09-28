@@ -122,7 +122,7 @@ def ls_frame(title: str, target: Path, comment: str, *extra: str) -> tuple[str, 
         stat = target.stat()
         stamp = datetime.fromtimestamp(stat.st_mtime).strftime("%b %d %H:%M")
         lines.append(
-            f"-rw-r--r--  1 smily 197121  {stat.st_size:>7}  {stamp}  {target.name}"
+            f"-rw-r--r--  1 kiln 197121  {stat.st_size:>7}  {stamp}  {target.name}"
         )
     else:
         lines.append(f"ls: cannot access '{target}': No such file or directory")

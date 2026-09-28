@@ -54,7 +54,7 @@ $ python -m kiln build examples/hazard/kiln.yaml --runtime-header None
  */
 [BUDGET] arena RAM  1,344 <= 2,048 ... OK
 [BUDGET] total ROM  2,096 <= 40,960 ... OK
-[SUCCESS] Built hazard-sniffer -> C:\Users\smily\Kiln\examples\hazard\build\model.c (Arena RAM: 1,344 B, Total ROM: 2,096 B, MACs: 4,608)
+[SUCCESS] Built hazard-sniffer -> examples\hazard\build\model.c (Arena RAM: 1,344 B, Total ROM: 2,096 B, MACs: 4,608)
 # exit code: 0
 ```
 
@@ -108,7 +108,7 @@ exit code 1 (non-zero = refused); `[SAFETY VIOLATION]` on stderr: True; `dangero
 $ python -m examples.kws.qat_eval
 QAT (shipped) checkpoint: C99 int8 91.01% | FP32 90.74%
   quantization delta : +0.27%
-  checkpoint         : C:\Users\smily\Kiln\examples\kws\kws_qat_weights.pt
+  checkpoint         : examples\kws\kws_qat_weights.pt
   params             : 38,590
   evaluated          : 734 held-out samples
 # exit code: 0
@@ -119,7 +119,7 @@ QAT (shipped) checkpoint: C99 int8 91.01% | FP32 90.74%
 ```text
 $ python -m examples.kws.ptq_test
 PTQ baseline (dB-domain FP32 training -> quantized C): 50.54%
-  checkpoint : C:\Users\smily\Kiln\examples\kws\kws_trained_weights.pt
+  checkpoint : examples\kws\kws_trained_weights.pt
   evaluated  : 734 held-out samples through the emitted C99 graph
 # exit code: 0
 ```
@@ -183,7 +183,7 @@ epoch  150/300 | loss 0.2994 | train 100.00% | val 91.00% | best 91.54%
 epoch  200/300 | loss 0.2980 | train 100.00% | val 91.27% | best 91.81%
 epoch  250/300 | loss 0.2971 | train 100.00% | val 91.00% | best 91.81%
 epoch  300/300 | loss 0.2969 | train 100.00% | val 91.00% | best 91.81%
-RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accuracy": 91.81, "test_accuracy": 89.51, "test_samples": 734, "seconds": 76.4, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmpczoe0qpn\\kws_qat_weights_repro.pt"}
+RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accuracy": 91.81, "test_accuracy": 89.51, "test_samples": 734, "seconds": 76.4, "output": "<tmp>/kws_qat_weights_repro.pt"}
 # exit code: 0
 ```
 
@@ -193,7 +193,7 @@ RESULT {"architecture": "shipped", "parameters": 38590, "epochs": 300, "val_accu
 $ python -m examples.kws.qat_eval --weights <tmp>/kws_qat_weights_repro.pt
 QAT (shipped) checkpoint: C99 int8 89.24% | FP32 89.51%
   quantization delta : -0.27%
-  checkpoint         : C:\Users\smily\AppData\Local\Temp\tmpczoe0qpn\kws_qat_weights_repro.pt
+  checkpoint         : <tmp>/kws_qat_weights_repro.pt
   params             : 38,590
   evaluated          : 734 held-out samples
 # exit code: 0
@@ -340,7 +340,7 @@ unsafe_validation:
   ssert                coef=+0.2588
   sser                 coef=+0.2588
 
-Results saved to C:\Users\smily\Kiln\examples\hazard\baseline_results.json
+Results saved to examples\hazard\baseline_results.json
 # exit code: 0
 ```
 
@@ -384,7 +384,7 @@ RESULT {"models": {"Kiln int8 student (emitted C)": {"footprint": "ROM 2,096 B; 
 | KWS PTQ baseline | PTQ baseline (dB-domain FP32 training -> quantized C): 50.54% | exit 0 |
 | KWS certificate (audit) | *   Arena (.bss) RAM      :    1,992 bytes / *   Total Constant ROM    :   39,614 bytes / *   Total MAC Operations  :  314,342 ops / *   Accumulator Safety    : Verified int32 safe [-385191, +220602] | exit 0 |
 | KWS Phase 1 table | PyTorch FP32 Top-1 Accuracy  : 90.74% / Kiln C99 int8 Top-1 Accuracy : 91.01% (668/734) / FP32 vs C99 Prediction Match : 98.50% agreement / Arena (.bss) RAM             : 1992 B (target < 2048 B) / MACs per inference           : 314,342 | exit 0 |
-| KWS retrain (CUDA) | {"architecture": "shipped", "epochs": 300, "output": "C:\\Users\\smily\\AppData\\Local\\Temp\\tmpczoe0qpn\\kws_qat_weights_repro.pt", "parameters": 38590, "seconds": 76.4, "test_accuracy": 89.51, "test_samples": 734, "val_accuracy": 91.81} | eval exit 0 |
+| KWS retrain (CUDA) | {"architecture": "shipped", "epochs": 300, "output": "<tmp>/kws_qat_weights_repro.pt", "parameters": 38590, "seconds": 76.4, "test_accuracy": 89.51, "test_samples": 734, "val_accuracy": 91.81} | eval exit 0 |
 | hazard baseline (sklearn) | Test accuracy (n=45):       100.00% / Held-out accuracy (n=60): 100.00% | exit 0 |
 | hazard showdown | Kiln int8 student: test 73.3% / held-out 73.3% | exit 0 |
 | hazard provenance | hazard_corpus.json: OK / held_out_real.json: OK | manifest.json |

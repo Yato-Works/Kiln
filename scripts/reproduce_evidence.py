@@ -50,7 +50,24 @@ def cell(value: object) -> str:
     return str(value).replace("|", "\\|")
 
 
+def sanitize(text: str) -> str:
+    """Strip local filesystem details (absolute repo path, temp dirs, username) from output."""
+    import re
+    repo_str = str(REPO_ROOT)
+    # Replace repo root in both slash formats
+    for pattern in (repo_str, repo_str.replace("\\", "/"), repo_str.replace("/", "\\")):
+        text = text.replace(pattern + "\\", "").replace(pattern + "/", "").replace(pattern, ".")
+    # Replace temp directories and Windows/POSIX home paths
+    text = re.sub(r'[A-Za-z]:\\[Uu]sers\\[^\\]+\\AppData\\Local\\Temp\\[^\\]+', '<tmp>', text)
+    text = re.sub(r'[A-Za-z]:\\[Uu]sers\\[^\\]+', '<home>', text)
+    text = re.sub(r'/home/[^/]+', '<home>', text)
+    text = re.sub(r'/tmp/[^/\s]+', '<tmp>', text)
+    return text
+
+
 def command_block(title: str, display: str, code: int, out: str, err: str) -> str:
+    out = sanitize(out)
+    err = sanitize(err)
     lines = [f"### {title}", "", "```text", f"$ {display}"]
     lines += out.rstrip("\n").splitlines()
     if err.strip():
@@ -293,7 +310,7 @@ Submission one-liner (verified by sections 2-13 below):
 
     # -- summary ---------------------------------------------------------------
     rows = "\n".join(
-        f"| {cell(name)} | {cell(value)} | {cell(source)} |"
+        f"| {cell(name)} | {cell(sanitize(value))} | {cell(source)} |"
         for name, value, source in summary_rows
     )
     sections.append(
