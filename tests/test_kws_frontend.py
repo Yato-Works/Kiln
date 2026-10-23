@@ -133,10 +133,20 @@ def _compile_pipeline(workdir: Path) -> Path:
     harness_src.write_text(PIPELINE_HARNESS, encoding="utf-8")
     subprocess.run(
         [
-            "gcc", "-std=c99", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic",
-            "-I", str(FRONTEND_DIR),
-            str(harness_src), str(FRONTEND_SRC), str(FRONTEND_DIR / "kws_pipeline.c"),
-            "-o", str(exe),
+            "gcc",
+            "-std=c99",
+            "-O3",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+            "-I",
+            str(FRONTEND_DIR),
+            str(harness_src),
+            str(FRONTEND_SRC),
+            str(FRONTEND_DIR / "kws_pipeline.c"),
+            "-o",
+            str(exe),
         ],
         check=True,
         capture_output=True,
@@ -151,10 +161,19 @@ def _compile_frontend(workdir: Path) -> Path:
     harness_src.write_text(FRONTEND_HARNESS, encoding="utf-8")
     subprocess.run(
         [
-            "gcc", "-std=c99", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic",
-            "-I", str(FRONTEND_DIR),
-            str(harness_src), str(FRONTEND_SRC),
-            "-o", str(exe),
+            "gcc",
+            "-std=c99",
+            "-O3",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+            "-I",
+            str(FRONTEND_DIR),
+            str(harness_src),
+            str(FRONTEND_SRC),
+            "-o",
+            str(exe),
         ],
         check=True,
         capture_output=True,
@@ -271,9 +290,7 @@ def frontend_exe() -> Path:
         yield _compile_frontend(Path(tmpdir))
 
 
-def test_kws_frontend_matches_python_reference_on_synthetic_pcm(
-    frontend_exe: Path
-) -> None:
+def test_kws_frontend_matches_python_reference_on_synthetic_pcm(frontend_exe: Path) -> None:
     cases = _synthetic_cases()
     c_frames = _run_frontend(frontend_exe, [pcm for _, pcm in cases])
 
@@ -291,9 +308,7 @@ def test_kws_frontend_matches_python_reference_on_synthetic_pcm(
         _assert_parity(name, c_spec, reference)
 
 
-def test_kws_frontend_tail_heavy_clip_uses_51_frame_peak(
-    frontend_exe: Path
-) -> None:
+def test_kws_frontend_tail_heavy_clip_uses_51_frame_peak(frontend_exe: Path) -> None:
     """The reference crops frames 49/50 *after* normalising by the mel peak.
 
     A clip whose loudest mel frame is one of those two frames would drift by the
@@ -326,9 +341,7 @@ def _read_wav_pcm(payload: bytes) -> torch.Tensor:
     return torch.tensor(samples, dtype=torch.int16)
 
 
-def test_kws_frontend_matches_python_reference_on_real_speech(
-    frontend_exe: Path
-) -> None:
+def test_kws_frontend_matches_python_reference_on_real_speech(frontend_exe: Path) -> None:
     if not SPEECH_COMMANDS_ARCHIVE.exists():
         pytest.skip("Speech Commands archive not found")
 
@@ -364,9 +377,7 @@ def _parse_int_table(source: str, name: str) -> list[int]:
     return [int(v) for v in re.findall(r"-?\d+", match.group(1))]
 
 
-def test_kws_pipeline_forwards_frontend_features(
-    frontend_exe: Path, pipeline_exe: Path
-) -> None:
+def test_kws_pipeline_forwards_frontend_features(frontend_exe: Path, pipeline_exe: Path) -> None:
     """`kws_predict_raw_pcm` must hand the frontend's int8 frames to the model."""
     pcm = dict(_synthetic_cases())["speech-like"]
     direct = _run_frontend(frontend_exe, [pcm])[0]

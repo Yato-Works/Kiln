@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import shutil
@@ -53,7 +53,9 @@ def test_cli_ops(capsys: pytest.CaptureFixture[str]) -> None:
     assert "ARGMAX" in captured.out
 
 
-def test_cli_compile(sample_model_file: Path, temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_compile(
+    sample_model_file: Path, temp_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     out_c = temp_dir / "compiled_model.c"
     ret = main(["compile", str(sample_model_file), "-o", str(out_c)])
     assert ret == 0
@@ -72,9 +74,7 @@ def test_cli_compile_runtime_header_none_is_self_contained(
 ) -> None:
     """`--runtime-header None` must drop the include, not emit `#include "None"`."""
     out_c = temp_dir / "self_contained.c"
-    ret = main(
-        ["compile", str(sample_model_file), "-o", str(out_c), "--runtime-header", "None"]
-    )
+    ret = main(["compile", str(sample_model_file), "-o", str(out_c), "--runtime-header", "None"])
     assert ret == 0
     content = out_c.read_text(encoding="utf-8")
     assert '#include "None"' not in content
@@ -116,9 +116,7 @@ dummy_input = torch.zeros(1, {kernel}, dtype=torch.uint8)
     assert not out_c.exists()
 
 
-def test_cli_compile_runtime_header_is_forwarded(
-    sample_model_file: Path, temp_dir: Path
-) -> None:
+def test_cli_compile_runtime_header_is_forwarded(sample_model_file: Path, temp_dir: Path) -> None:
     """A custom header name is passed through verbatim (the default behaviour)."""
     out_c = temp_dir / "with_shim.c"
     ret = main(

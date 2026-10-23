@@ -87,7 +87,7 @@ def test_normal_form_rules_independently(snippet: bytes) -> None:
             expected = byte
         assert normal[index] == expected, index
 
-    assert normal[len(head):] == b" " * (WINDOW_BYTES - len(head))
+    assert normal[len(head) :] == b" " * (WINDOW_BYTES - len(head))
 
 
 @pytest.mark.parametrize("snippet", SNIPPETS)
@@ -117,7 +117,7 @@ def test_bigram_channel_pairs_each_byte_with_its_successor() -> None:
 
     assert len(pairs) == WINDOW_BYTES + 1
     for index in range(WINDOW_BYTES):
-        expected = BIGRAM_BASE + fnv1a32(pairs[index:index + 2]) % BIGRAM_BUCKETS
+        expected = BIGRAM_BASE + fnv1a32(pairs[index : index + 2]) % BIGRAM_BUCKETS
         assert tokens[WINDOW_BYTES + index] == expected
 
 
@@ -175,7 +175,18 @@ def test_text_to_emitted_c_label_is_bit_exact() -> None:
             encoding="utf-8",
         )
         build = subprocess.run(
-            ["gcc", "-std=c99", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic", str(source), "-o", str(binary)],
+            [
+                "gcc",
+                "-std=c99",
+                "-O3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                str(source),
+                "-o",
+                str(binary),
+            ],
             capture_output=True,
             text=True,
         )
@@ -197,4 +208,3 @@ def test_text_to_emitted_c_label_is_bit_exact() -> None:
 
     assert compiled == reference
     assert all(0 <= label < DEFAULT_LABELS for label in compiled)
-

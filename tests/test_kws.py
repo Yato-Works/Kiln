@@ -16,6 +16,7 @@ from kiln.ref.ref import run_ref
 
 def _has_gcc() -> bool:
     import shutil
+
     return shutil.which("gcc") is not None
 
 
@@ -65,7 +66,9 @@ def test_kws_real_speech_commands_accuracy_and_c99_parity():
     c_code = emit_c(graph, weights, runtime_header=None)
 
     input_len = 490
-    harness = c_code + f"""
+    harness = (
+        c_code
+        + f"""
 #include <stdio.h>
 #include <stdint.h>
 
@@ -85,12 +88,26 @@ int main(int argc, char **argv) {{
     return 0;
 }}
 """
+    )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         src_file = Path(tmpdir) / "kws_test.c"
         exe_file = Path(tmpdir) / "kws_test.exe"
         src_file.write_text(harness, encoding="utf-8")
-        subprocess.run(["gcc", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic", str(src_file), "-o", str(exe_file)], check=True)
+        subprocess.run(
+            [
+                "gcc",
+                "-O3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                str(src_file),
+                "-o",
+                str(exe_file),
+            ],
+            check=True,
+        )
 
         int8_samples = []
         for spec in test_specs:
@@ -98,13 +115,16 @@ int main(int argc, char **argv) {{
             int8_samples.append(q_spec.flatten().tolist())
 
         import struct
+
         bin_file = Path(tmpdir) / "test_inputs.bin"
         with open(bin_file, "wb") as bf:
             bf.write(struct.pack("<i", len(int8_samples)))
             for s in int8_samples:
                 bf.write(struct.pack(f"{len(s)}b", *s))
 
-        c_proc = subprocess.run([str(exe_file), str(bin_file)], capture_output=True, text=True, check=True)
+        c_proc = subprocess.run(
+            [str(exe_file), str(bin_file)], capture_output=True, text=True, check=True
+        )
         c_preds = [int(line) for line in c_proc.stdout.strip().split()]
 
         gt_labels = test_labels.tolist()

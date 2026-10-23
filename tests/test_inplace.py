@@ -28,12 +28,10 @@ RELU_TABLE = [max(0, index) for index in range(-128, 128)]
 
 WEIGHTS = {
     "w0": [
-        [[(oc * 5 + ic * 3 + k) % 9 - 4 for k in range(3)] for ic in range(4)]
-        for oc in range(4)
+        [[(oc * 5 + ic * 3 + k) % 9 - 4 for k in range(3)] for ic in range(4)] for oc in range(4)
     ],
     "w1": [
-        [[(oc * 7 + ic * 5 + k) % 11 - 5 for k in range(3)] for ic in range(4)]
-        for oc in range(8)
+        [[(oc * 7 + ic * 5 + k) % 11 - 5 for k in range(3)] for ic in range(4)] for oc in range(8)
     ],
 }
 
@@ -54,12 +52,36 @@ def _fused_graph() -> Graph:
         "out": TensorDesc("out", shape=(), dtype=DType.INT8),
     }
     nodes = [
-        Node(OpType.CONV1D, "op0", inputs=["in"], outputs=["conv"], attrs={"weight": "w0", "stride": 1, "padding": 1}),
+        Node(
+            OpType.CONV1D,
+            "op0",
+            inputs=["in"],
+            outputs=["conv"],
+            attrs={"weight": "w0", "stride": 1, "padding": 1},
+        ),
         Node(OpType.LUT, "op1", inputs=["conv"], outputs=["relu"], attrs={"table": RELU_TABLE}),
-        Node(OpType.MAXPOOL1D, "op2", inputs=["relu"], outputs=["pool"], attrs={"kernel_size": 2, "stride": 2, "padding": 0}),
-        Node(OpType.CONV1D, "op3", inputs=["pool"], outputs=["conv2"], attrs={"weight": "w1", "stride": 1, "padding": 1}),
+        Node(
+            OpType.MAXPOOL1D,
+            "op2",
+            inputs=["relu"],
+            outputs=["pool"],
+            attrs={"kernel_size": 2, "stride": 2, "padding": 0},
+        ),
+        Node(
+            OpType.CONV1D,
+            "op3",
+            inputs=["pool"],
+            outputs=["conv2"],
+            attrs={"weight": "w1", "stride": 1, "padding": 1},
+        ),
         Node(OpType.LUT, "op4", inputs=["conv2"], outputs=["relu2"], attrs={"table": RELU_TABLE}),
-        Node(OpType.MAXPOOL1D, "op5", inputs=["relu2"], outputs=["pool2"], attrs={"kernel_size": 12, "stride": 12, "padding": 0}),
+        Node(
+            OpType.MAXPOOL1D,
+            "op5",
+            inputs=["relu2"],
+            outputs=["pool2"],
+            attrs={"kernel_size": 12, "stride": 12, "padding": 0},
+        ),
         Node(OpType.ARGMAX, "op6", inputs=["pool2"], outputs=["out"]),
     ]
     return Graph(inputs=["in"], outputs=["out"], nodes=nodes, tensors=tensors)
@@ -75,7 +97,13 @@ def _branching_graph() -> Graph:
         "out": TensorDesc("out", shape=(), dtype=DType.INT8),
     }
     nodes = [
-        Node(OpType.CONV1D, "op0", inputs=["in"], outputs=["conv"], attrs={"weight": "w", "stride": 1, "padding": 1}),
+        Node(
+            OpType.CONV1D,
+            "op0",
+            inputs=["in"],
+            outputs=["conv"],
+            attrs={"weight": "w", "stride": 1, "padding": 1},
+        ),
         Node(OpType.LUT, "op1", inputs=["conv"], outputs=["relu"], attrs={"table": RELU_TABLE}),
         Node(OpType.ADD, "op2", inputs=["conv", "relu"], outputs=["sum"]),
         Node(OpType.ARGMAX, "op3", inputs=["sum"], outputs=["out"]),
@@ -105,7 +133,13 @@ def test_graph_input_consumer_is_never_aliased() -> None:
     }
     nodes = [
         Node(OpType.LUT, "op0", inputs=["in"], outputs=["relu"], attrs={"table": RELU_TABLE}),
-        Node(OpType.CONV1D, "op1", inputs=["relu"], outputs=["conv"], attrs={"weight": "w0", "stride": 1, "padding": 1}),
+        Node(
+            OpType.CONV1D,
+            "op1",
+            inputs=["relu"],
+            outputs=["conv"],
+            attrs={"weight": "w0", "stride": 1, "padding": 1},
+        ),
         Node(OpType.ARGMAX, "op2", inputs=["conv"], outputs=["out"]),
     ]
     input_fed = Graph(inputs=["in"], outputs=["out"], nodes=nodes, tensors=tensors)
@@ -121,7 +155,13 @@ def test_differently_sized_lut_is_never_aliased() -> None:
         "out": TensorDesc("out", shape=(), dtype=DType.INT8),
     }
     nodes = [
-        Node(OpType.CONV1D, "op0", inputs=["in"], outputs=["conv"], attrs={"weight": "w0", "stride": 1, "padding": 1}),
+        Node(
+            OpType.CONV1D,
+            "op0",
+            inputs=["in"],
+            outputs=["conv"],
+            attrs={"weight": "w0", "stride": 1, "padding": 1},
+        ),
         Node(OpType.LUT, "op1", inputs=["conv"], outputs=["relu"], attrs={"table": RELU_TABLE}),
         Node(OpType.ARGMAX, "op2", inputs=["relu"], outputs=["out"]),
     ]
@@ -185,7 +225,9 @@ def test_inplace_fusion_is_bit_exact_against_the_reference() -> None:
     """The fused in-place LUT must produce identical C and reference results."""
     graph = _fused_graph()
     code = emit_c(graph, WEIGHTS, runtime_header=None)
-    harness = code + f"""
+    harness = (
+        code
+        + f"""
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -199,10 +241,10 @@ int main(int argc, char **argv) {{
     return 0;
 }}
 """
+    )
 
     inputs = [
-        [((index * 37 + slot * 11) % 255) - 127 for slot in range(LENGTH)]
-        for index in range(16)
+        [((index * 37 + slot * 11) % 255) - 127 for slot in range(LENGTH)] for index in range(16)
     ]
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -210,7 +252,17 @@ int main(int argc, char **argv) {{
         binary = Path(tmpdir) / "fused.exe"
         source.write_text(harness, encoding="utf-8")
         subprocess.run(
-            ["gcc", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic", str(source), "-o", str(binary)],
+            [
+                "gcc",
+                "-O3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                str(source),
+                "-o",
+                str(binary),
+            ],
             check=True,
         )
 
@@ -224,8 +276,5 @@ int main(int argc, char **argv) {{
             )
             compiled.append(int(result.stdout.strip()))
 
-    reference = [
-        run_ref(graph, {"in": sample}, WEIGHTS)["out"][0]
-        for sample in inputs
-    ]
+    reference = [run_ref(graph, {"in": sample}, WEIGHTS)["out"][0] for sample in inputs]
     assert compiled == reference

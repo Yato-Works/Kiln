@@ -38,6 +38,7 @@ class SafetyViolationError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class EmittedArtifacts:
     """What ``emit_spec_artifacts`` wrote into one output directory."""
+
     model_c: Path
     report: BudgetReport
     frontend_sources: tuple[Path, ...]

@@ -24,7 +24,15 @@ jobs:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install Kiln
-        run: python -m pip install -e ".[test]"
+        run: python -m pip install -e ".[test,dev]"
+
+      - name: Format and lint
+        run: |
+          python -m ruff format --check kiln tests
+          python -m ruff check kiln
+
+      - name: Type check
+        run: python -m mypy kiln
 
       - name: CLI smoke test
         run: |
@@ -39,6 +47,15 @@ jobs:
         # object references no allocator and that the linked binary's labels match
         # the reference; the suite below repeats this for both reference specs.
         run: python -m kiln link examples/hazard/kiln.yaml --run
+
+      - name: Install ARM Embedded Toolchain & QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi qemu-user
+
+      - name: Phase 4 Cortex-M cross-compile & QEMU replay test
+        # Real embedded binary verification on ARM Cortex-M0+ via QEMU user emulation
+        run: python -m kiln link examples/hazard/kiln.yaml --target cortex-m0plus --run
 
       - name: Test suite
         # The 107 MB Speech Commands archive is not vendored, so the tests that

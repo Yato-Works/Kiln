@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import pytest
 from kiln.budget.report import audit_graph, format_budget_certificate
@@ -28,11 +28,23 @@ def test_budget_report_calculations() -> None:
 
     nodes = [
         Node(OpType.EMBEDDING, "op_emb", inputs=["in"], outputs=["emb"], attrs={"weight": "w_emb"}),
-        Node(OpType.CONV1D, "op_conv", inputs=["emb"], outputs=["conv"], attrs={"weight": "w_conv", "stride": 1, "padding": 1}),
+        Node(
+            OpType.CONV1D,
+            "op_conv",
+            inputs=["emb"],
+            outputs=["conv"],
+            attrs={"weight": "w_conv", "stride": 1, "padding": 1},
+        ),
         Node(OpType.LUT, "op_lut", inputs=["conv"], outputs=["lut"], attrs={"table": lut_table}),
         Node(OpType.ADD, "op_add", inputs=["conv", "lut"], outputs=["sum"]),
         Node(OpType.MATMUL, "op_fc", inputs=["sum"], outputs=["fc"], attrs={"weight": "w_fc"}),
-        Node(OpType.MAXPOOL1D, "op_pool", inputs=["fc"], outputs=["pool"], attrs={"kernel_size": 4, "stride": 4, "padding": 0}),
+        Node(
+            OpType.MAXPOOL1D,
+            "op_pool",
+            inputs=["fc"],
+            outputs=["pool"],
+            attrs={"kernel_size": 4, "stride": 4, "padding": 0},
+        ),
         Node(OpType.ARGMAX, "op_argmax", inputs=["pool"], outputs=["out"]),
     ]
 

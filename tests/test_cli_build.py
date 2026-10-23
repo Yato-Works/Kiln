@@ -102,9 +102,7 @@ def test_build_missing_spec_returns_error(
     assert "[ERROR] Build failed" in capsys.readouterr().err
 
 
-def test_build_hazard_reference_spec(
-    temp_dir: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_build_hazard_reference_spec(temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """`kiln build` on the shipped hazard reference spec (full pipeline)."""
     spec_path = REPO_ROOT / "examples" / "hazard" / "kiln.yaml"
     assert spec_path.is_file(), "reference spec must be checked in"
@@ -155,4 +153,4 @@ def test_emit_spec_artifacts_refuses_overflow_before_writing(
         emit_spec_artifacts(spec, loaded, out_dir)
 
     assert exc.value.report.int32_overflow_free is False
-    assert not out_dir.exists()               # not even an empty directory
+    assert not out_dir.exists()  # not even an empty directory

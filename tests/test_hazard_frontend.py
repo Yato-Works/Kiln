@@ -75,7 +75,9 @@ static int _decode(const char *hex, uint8_t *out, size_t *out_length) {
 }
 """
 
-_TOKENIZER_MAIN = _HEX_HEADER + """
+_TOKENIZER_MAIN = (
+    _HEX_HEADER
+    + """
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "constants") == 0) {
         printf("%d %d %d %d %d\\n",
@@ -97,9 +99,12 @@ int main(int argc, char **argv) {
     return 0;
 }
 """
+)
 
 
-_PIPELINE_MAIN = _HEX_HEADER + """
+_PIPELINE_MAIN = (
+    _HEX_HEADER
+    + """
 #include "hazard_pipeline.h"
 
 int main(int argc, char **argv) {
@@ -113,6 +118,7 @@ int main(int argc, char **argv) {
     return 0;
 }
 """
+)
 
 
 def _random_cases(count: int = 24) -> list[bytes]:
@@ -131,7 +137,16 @@ def _build(binary_name: str, source_code: str, extra: tuple[str, ...] = ()) -> P
     source.write_text(source_code, encoding="utf-8")
 
     build = subprocess.run(
-        ["gcc", *GCC_FLAGS, f"-I{FRONTEND_DIR}", str(source), str(TOKENIZER_SRC), *extra, "-o", str(binary)],
+        [
+            "gcc",
+            *GCC_FLAGS,
+            f"-I{FRONTEND_DIR}",
+            str(source),
+            str(TOKENIZER_SRC),
+            *extra,
+            "-o",
+            str(binary),
+        ],
         capture_output=True,
         text=True,
     )
@@ -159,8 +174,12 @@ def pipeline_exe(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_header_constants_match_the_contract(tokenizer_exe: Path) -> None:
-    result = subprocess.run([str(tokenizer_exe), "constants"], capture_output=True, text=True, check=True)
-    window, tokens, vocab, bigram_base, bigram_buckets = (int(value) for value in result.stdout.split())
+    result = subprocess.run(
+        [str(tokenizer_exe), "constants"], capture_output=True, text=True, check=True
+    )
+    window, tokens, vocab, bigram_base, bigram_buckets = (
+        int(value) for value in result.stdout.split()
+    )
 
     assert (window, tokens, vocab) == (WINDOW_BYTES, TOKEN_COUNT, VOCAB_SIZE)
     assert (bigram_base, bigram_buckets) == (BIGRAM_BASE, BIGRAM_BUCKETS)
@@ -184,10 +203,11 @@ def test_text_to_label_matches_the_contract(pipeline_exe: Path) -> None:
     weights = random_weights()
 
     for source in [*CASES, *_random_cases()]:
-        result = subprocess.run([str(pipeline_exe), source.hex()], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            [str(pipeline_exe), source.hex()], capture_output=True, text=True, check=True
+        )
         compiled = int(result.stdout.strip())
         expected = run_ref(graph, {"tokens": list(tokenize(source))}, weights)["label"][0]
 
         assert compiled == expected, source
         assert 0 <= compiled < DEFAULT_LABELS
-

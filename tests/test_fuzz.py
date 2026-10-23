@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import shutil
@@ -38,7 +38,9 @@ def pipeline_c_binary():
     }
 
     w_emb = [[(i * 3 + j * 5) % 30 - 15 for j in range(8)] for i in range(256)]
-    w_conv = [[[(oc * 7 + ic * 3 + k) % 15 - 7 for k in range(3)] for ic in range(2)] for oc in range(2)]
+    w_conv = [
+        [[(oc * 7 + ic * 3 + k) % 15 - 7 for k in range(3)] for ic in range(2)] for oc in range(2)
+    ]
     lut_table = [((i - 128) // 3) for i in range(256)]
     w_fc = [[(o * 11 + f * 7) % 20 - 10 for f in range(8)] for o in range(4)]
 
@@ -46,11 +48,23 @@ def pipeline_c_binary():
 
     nodes = [
         Node(OpType.EMBEDDING, "op_emb", inputs=["in"], outputs=["emb"], attrs={"weight": "w_emb"}),
-        Node(OpType.CONV1D, "op_conv", inputs=["emb"], outputs=["conv"], attrs={"weight": "w_conv", "stride": 1, "padding": 1}),
+        Node(
+            OpType.CONV1D,
+            "op_conv",
+            inputs=["emb"],
+            outputs=["conv"],
+            attrs={"weight": "w_conv", "stride": 1, "padding": 1},
+        ),
         Node(OpType.LUT, "op_lut", inputs=["conv"], outputs=["lut"], attrs={"table": lut_table}),
         Node(OpType.ADD, "op_add", inputs=["conv", "lut"], outputs=["sum"]),
         Node(OpType.MATMUL, "op_fc", inputs=["sum"], outputs=["fc"], attrs={"weight": "w_fc"}),
-        Node(OpType.MAXPOOL1D, "op_pool", inputs=["fc"], outputs=["pool"], attrs={"kernel_size": 4, "stride": 4, "padding": 0}),
+        Node(
+            OpType.MAXPOOL1D,
+            "op_pool",
+            inputs=["fc"],
+            outputs=["pool"],
+            attrs={"kernel_size": 4, "stride": 4, "padding": 0},
+        ),
         Node(OpType.ARGMAX, "op_argmax", inputs=["pool"], outputs=["out"]),
     ]
 
@@ -58,7 +72,9 @@ def pipeline_c_binary():
     c_code = emit_c(graph, weights, runtime_header=None)
 
     # Fast IO harness reading (b0, b1) per line until EOF
-    harness = c_code + """
+    harness = (
+        c_code
+        + """
 #include <stdio.h>
 #include <stdint.h>
 
@@ -75,12 +91,23 @@ int main(void) {
     return 0;
 }
 """
+    )
     tmpdir = tempfile.mkdtemp()
     src_path = Path(tmpdir) / "fuzz_model.c"
     exe_path = Path(tmpdir) / "fuzz_model.exe"
     src_path.write_text(harness, encoding="utf-8")
 
-    compile_cmd = ["gcc", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic", str(src_path), "-o", str(exe_path)]
+    compile_cmd = [
+        "gcc",
+        "-O3",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        str(src_path),
+        "-o",
+        str(exe_path),
+    ]
     subprocess.run(compile_cmd, check=True)
 
     proc = subprocess.Popen(
@@ -128,7 +155,9 @@ class TestFuzzDifferential:
     def test_hypothesis_random_fuzz(self, pipeline_c_binary, b0: int, b1: int) -> None:
         """Tests 150 arbitrary random byte combinations."""
         c_pred, ref_pred = _eval_c_and_ref(pipeline_c_binary, b0, b1)
-        assert c_pred == ref_pred, f"Bit mismatch for inputs ({b0}, {b1}): C={c_pred}, Ref={ref_pred}"
+        assert c_pred == ref_pred, (
+            f"Bit mismatch for inputs ({b0}, {b1}): C={c_pred}, Ref={ref_pred}"
+        )
 
     def test_extreme_edge_cases(self, pipeline_c_binary) -> None:
         """Exhaustively tests all boundary conditions and pathological patterns."""
@@ -158,4 +187,6 @@ class TestFuzzDifferential:
         ]
         for b0, b1 in edge_patterns:
             c_pred, ref_pred = _eval_c_and_ref(pipeline_c_binary, b0, b1)
-            assert c_pred == ref_pred, f"Bit mismatch for edge pattern ({b0:#04x}, {b1:#04x}): C={c_pred}, Ref={ref_pred}"
+            assert c_pred == ref_pred, (
+                f"Bit mismatch for edge pattern ({b0:#04x}, {b1:#04x}): C={c_pred}, Ref={ref_pred}"
+            )

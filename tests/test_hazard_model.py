@@ -172,9 +172,7 @@ def test_int_forward_is_bit_exact_with_kiln_reference(
     assert direct == reference_labels
 
 
-def test_emitted_c_is_bit_exact_with_reference(
-    w_dict, all_rows, graph, reference_labels
-) -> None:
+def test_emitted_c_is_bit_exact_with_reference(w_dict, all_rows, graph, reference_labels) -> None:
     """M2.2 core: gcc-compiled emitted C == ``kiln.ref`` on all 360 samples."""
     if shutil.which("gcc") is None:
         pytest.skip("gcc is required for the emitted-C bit-exactness check")
@@ -214,4 +212,3 @@ def test_reported_metrics_clear_the_floor(student: dict[str, Any]) -> None:
     assert student["training"]["qat_best_val_acc"] >= metrics["int_val"] - 1e-9
     assert student["training"]["qat"] is True
     assert student["training"]["tau"] == [1.0, 0.08]
-

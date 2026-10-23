@@ -29,6 +29,7 @@ __all__ = (
 @dataclass(frozen=True, slots=True)
 class InputSpec:
     """Input tensor specification."""
+
     name: str
     shape: tuple[int, ...]
     dtype: str = "uint8"  # "uint8" or "int8"
@@ -37,6 +38,7 @@ class InputSpec:
 @dataclass(frozen=True, slots=True)
 class OutputSpec:
     """Output tensor specification."""
+
     name: str
     classes: tuple[str, ...] = ()
     dtype: str = "int8"
@@ -45,6 +47,7 @@ class OutputSpec:
 @dataclass(frozen=True, slots=True)
 class BudgetSpec:
     """Static resource envelope targets for MCU deployment."""
+
     ram_arena_max_bytes: int = 2048
     rom_total_max_bytes: int = 40960
     macs_max: int | None = None
@@ -55,6 +58,7 @@ class BudgetSpec:
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
     """Model graph / weights resolution."""
+
     entry_point: str
     weights: str | None = None
     architecture: str | None = None
@@ -63,6 +67,7 @@ class ModelSpec:
 @dataclass(frozen=True, slots=True)
 class FrontendSpec:
     """Optional C frontend preprocessor / tokenizer integration."""
+
     type: str  # e.g., "tokenizer", "audio", "custom", "none"
     source_files: tuple[str, ...] = ()
     header_files: tuple[str, ...] = ()
@@ -72,6 +77,7 @@ class FrontendSpec:
 @dataclass(frozen=True, slots=True)
 class DatasetSpec:
     """Dataset / provenance metadata."""
+
     corpus: str | None = None
     manifest: str | None = None
     split_seed: int = 1337
@@ -89,6 +95,7 @@ class SearchSpec:
     keeps its shipped (trained, single-shape) factory while searching a
     shape-parameterized one.
     """
+
     params: Mapping[str, tuple[int, ...]]
     entry_point: str | None = None
     max_candidates: int = 2048
@@ -97,6 +104,7 @@ class SearchSpec:
 @dataclass(frozen=True, slots=True)
 class KilnSpec:
     """Complete declarative task specification (kiln.yaml)."""
+
     name: str
     version: int
     task: str  # e.g., "classification"
@@ -153,7 +161,9 @@ def _parse_model_spec(d: Mapping[str, Any]) -> ModelSpec:
     return ModelSpec(
         entry_point=str(d["entry_point"]),
         weights=str(d["weights"]) if "weights" in d and d["weights"] is not None else None,
-        architecture=str(d["architecture"]) if "architecture" in d and d["architecture"] is not None else None,
+        architecture=str(d["architecture"])
+        if "architecture" in d and d["architecture"] is not None
+        else None,
     )
 
 

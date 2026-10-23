@@ -25,6 +25,7 @@ __all__ = ("LoadedModel", "resolve_model_graph")
 
 class LoadedModel:
     """Encapsulates the resolved computation graph and int8 weights."""
+
     def __init__(self, graph: Graph, weights: Mapping[str, Any], spec: KilnSpec):
         self.graph = graph
         self.weights = weights
@@ -153,9 +154,7 @@ def resolve_model_graph(
         inst = target()
         return _export_module_to_loaded(inst, spec)
 
-    raise TypeError(
-        f"Target '{resolved_entry}' is neither a callable factory nor an nn.Module"
-    )
+    raise TypeError(f"Target '{resolved_entry}' is neither a callable factory nor an nn.Module")
 
 
 def _export_module_to_loaded(model: nn.Module, spec: KilnSpec) -> LoadedModel:
@@ -165,7 +164,7 @@ def _export_module_to_loaded(model: nn.Module, spec: KilnSpec) -> LoadedModel:
         if w_path.exists():
             state = torch.load(w_path, map_location="cpu", weights_only=True)
             model.load_state_dict(state)
-    
+
     # Construct dummy input from spec shape and dtype
     dtype = torch.uint8 if spec.input.dtype == "uint8" else torch.int8
     dummy = torch.zeros(spec.input.shape, dtype=dtype)

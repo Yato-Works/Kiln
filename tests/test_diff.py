@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import random
 import shutil
@@ -30,7 +30,9 @@ class TestE2EDiff:
         """Compiles C code with -O3 -Wall -Werror and executes the test inputs."""
         input_len = len(test_inputs[0])
 
-        main_c = c_code + f"""
+        main_c = (
+            c_code
+            + f"""
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -46,6 +48,7 @@ int main(int argc, char **argv) {{
     return 0;
 }}
 """
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             src_path = Path(tmpdir) / "model.c"
             exe_path = Path(tmpdir) / "model.exe"
@@ -54,7 +57,9 @@ int main(int argc, char **argv) {{
             compile_cmd = ["gcc", "-O3", "-Wall", "-Werror", str(src_path), "-o", str(exe_path)]
             build_res = subprocess.run(compile_cmd, capture_output=True, text=True)
             if build_res.returncode != 0:
-                pytest.fail(f"C compilation failed:\nSTDOUT:\n{build_res.stdout}\nSTDERR:\n{build_res.stderr}")
+                pytest.fail(
+                    f"C compilation failed:\nSTDOUT:\n{build_res.stdout}\nSTDERR:\n{build_res.stderr}"
+                )
 
             predictions: list[int] = []
             for inp in test_inputs:
@@ -83,19 +88,42 @@ int main(int argc, char **argv) {{
         }
 
         w_emb = [[(i * 3 + j * 5) % 30 - 15 for j in range(8)] for i in range(256)]
-        w_conv = [[[(oc * 7 + ic * 3 + k) % 15 - 7 for k in range(3)] for ic in range(2)] for oc in range(2)]
+        w_conv = [
+            [[(oc * 7 + ic * 3 + k) % 15 - 7 for k in range(3)] for ic in range(2)]
+            for oc in range(2)
+        ]
         lut_table = [((i - 128) // 3) for i in range(256)]
         w_fc = [[(o * 11 + f * 7) % 20 - 10 for f in range(8)] for o in range(4)]
 
         weights = {"w_emb": w_emb, "w_conv": w_conv, "w_fc": w_fc}
 
         nodes = [
-            Node(OpType.EMBEDDING, "op_emb", inputs=["in"], outputs=["emb"], attrs={"weight": "w_emb"}),
-            Node(OpType.CONV1D, "op_conv", inputs=["emb"], outputs=["conv"], attrs={"weight": "w_conv", "stride": 1, "padding": 1}),
-            Node(OpType.LUT, "op_lut", inputs=["conv"], outputs=["lut"], attrs={"table": lut_table}),
+            Node(
+                OpType.EMBEDDING,
+                "op_emb",
+                inputs=["in"],
+                outputs=["emb"],
+                attrs={"weight": "w_emb"},
+            ),
+            Node(
+                OpType.CONV1D,
+                "op_conv",
+                inputs=["emb"],
+                outputs=["conv"],
+                attrs={"weight": "w_conv", "stride": 1, "padding": 1},
+            ),
+            Node(
+                OpType.LUT, "op_lut", inputs=["conv"], outputs=["lut"], attrs={"table": lut_table}
+            ),
             Node(OpType.ADD, "op_add", inputs=["conv", "lut"], outputs=["sum"]),
             Node(OpType.MATMUL, "op_fc", inputs=["sum"], outputs=["fc"], attrs={"weight": "w_fc"}),
-            Node(OpType.MAXPOOL1D, "op_pool", inputs=["fc"], outputs=["pool"], attrs={"kernel_size": 4, "stride": 4, "padding": 0}),
+            Node(
+                OpType.MAXPOOL1D,
+                "op_pool",
+                inputs=["fc"],
+                outputs=["pool"],
+                attrs={"kernel_size": 4, "stride": 4, "padding": 0},
+            ),
             Node(OpType.ARGMAX, "op_argmax", inputs=["pool"], outputs=["out"]),
         ]
 
@@ -137,10 +165,30 @@ int main(int argc, char **argv) {{
         weights = {"w_emb": w_emb, "w_fc1": w_fc1, "w_fc2": w_fc2}
 
         nodes = [
-            Node(OpType.EMBEDDING, "n_emb", inputs=["tokens"], outputs=["emb"], attrs={"weight": "w_emb"}),
-            Node(OpType.MATMUL, "n_fc1", inputs=["emb"], outputs=["hidden"], attrs={"weight": "w_fc1"}),
-            Node(OpType.LUT, "n_lut", inputs=["hidden"], outputs=["act"], attrs={"table": lut_relu}),
-            Node(OpType.MATMUL, "n_fc2", inputs=["act"], outputs=["logits"], attrs={"weight": "w_fc2"}),
+            Node(
+                OpType.EMBEDDING,
+                "n_emb",
+                inputs=["tokens"],
+                outputs=["emb"],
+                attrs={"weight": "w_emb"},
+            ),
+            Node(
+                OpType.MATMUL,
+                "n_fc1",
+                inputs=["emb"],
+                outputs=["hidden"],
+                attrs={"weight": "w_fc1"},
+            ),
+            Node(
+                OpType.LUT, "n_lut", inputs=["hidden"], outputs=["act"], attrs={"table": lut_relu}
+            ),
+            Node(
+                OpType.MATMUL,
+                "n_fc2",
+                inputs=["act"],
+                outputs=["logits"],
+                attrs={"weight": "w_fc2"},
+            ),
             Node(OpType.ARGMAX, "n_argmax", inputs=["logits"], outputs=["pred"]),
         ]
 
@@ -174,9 +222,27 @@ int main(int argc, char **argv) {{
         weights = {"w_emb": w_emb, "w_conv": w_conv}
 
         nodes = [
-            Node(OpType.EMBEDDING, "emb_node", inputs=["in"], outputs=["emb"], attrs={"weight": "w_emb"}),
-            Node(OpType.CONV1D, "conv_node", inputs=["emb"], outputs=["conv"], attrs={"weight": "w_conv", "stride": 2, "padding": 1}),
-            Node(OpType.MAXPOOL1D, "pool_node", inputs=["conv"], outputs=["pool"], attrs={"kernel_size": 3, "stride": 2, "padding": 0}),
+            Node(
+                OpType.EMBEDDING,
+                "emb_node",
+                inputs=["in"],
+                outputs=["emb"],
+                attrs={"weight": "w_emb"},
+            ),
+            Node(
+                OpType.CONV1D,
+                "conv_node",
+                inputs=["emb"],
+                outputs=["conv"],
+                attrs={"weight": "w_conv", "stride": 2, "padding": 1},
+            ),
+            Node(
+                OpType.MAXPOOL1D,
+                "pool_node",
+                inputs=["conv"],
+                outputs=["pool"],
+                attrs={"kernel_size": 3, "stride": 2, "padding": 0},
+            ),
             Node(OpType.ARGMAX, "argmax_node", inputs=["pool"], outputs=["out"]),
         ]
 
@@ -211,7 +277,6 @@ int main(int argc, char **argv) {{
         assert len(set(c_preds)) > 1  # the bag discriminates instead of collapsing
 
 
-
 #: The Phase 2 bag shape itself lives in ``examples/hazard/graph.py`` (M2.0/M2.2);
 #: this file only exercises its IR behaviour, i.e. ``MAXPOOL1D(axis=0)``.
 
@@ -225,7 +290,13 @@ def _class_axis_graph(attrs: dict) -> Graph:
         "label": TensorDesc("label", shape=(), dtype=DType.INT8),
     }
     nodes = [
-        Node(OpType.EMBEDDING, "op_emb", inputs=["tokens"], outputs=["emb"], attrs={"weight": "w_emb"}),
+        Node(
+            OpType.EMBEDDING,
+            "op_emb",
+            inputs=["tokens"],
+            outputs=["emb"],
+            attrs={"weight": "w_emb"},
+        ),
         Node(OpType.MAXPOOL1D, "op_pool", inputs=["emb"], outputs=["pooled"], attrs=attrs),
         Node(OpType.ARGMAX, "op_argmax", inputs=["pooled"], outputs=["label"]),
     ]
@@ -237,7 +308,9 @@ WEIGHTS_8X3 = {"w_emb": [[1, 2, 3] for _ in range(256)]}
 
 def test_maxpool_axis_unset_matches_axis_last() -> None:
     """The default is the last axis, so ``axis = rank - 1`` emits identical C."""
-    default = emit_c(_class_axis_graph({"kernel_size": 3, "stride": 3}), WEIGHTS_8X3, runtime_header=None)
+    default = emit_c(
+        _class_axis_graph({"kernel_size": 3, "stride": 3}), WEIGHTS_8X3, runtime_header=None
+    )
     explicit = emit_c(
         _class_axis_graph({"axis": 1, "kernel_size": 3, "stride": 3}),
         WEIGHTS_8X3,

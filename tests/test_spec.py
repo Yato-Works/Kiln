@@ -18,6 +18,7 @@ from kiln.spec import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+
 #: A complete, valid spec mapping used as the base for mutation-based tests.
 def _valid_spec() -> dict:
     return {
@@ -171,9 +172,7 @@ def test_load_spec_non_mapping_yaml_raises(temp_dir: Path) -> None:
         load_spec(path)
 
 
-@pytest.mark.parametrize(
-    "relative", ["examples/hazard/kiln.yaml", "examples/kws/kiln.yaml"]
-)
+@pytest.mark.parametrize("relative", ["examples/hazard/kiln.yaml", "examples/kws/kiln.yaml"])
 def test_reference_specs_parse(relative: str) -> None:
     """The shipped reference specs validate against the schema."""
     spec = load_spec(REPO_ROOT / relative)

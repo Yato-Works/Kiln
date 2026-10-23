@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import subprocess
 import tempfile
@@ -93,7 +93,9 @@ int main(void) {
         src.write_text(c_source, encoding="utf-8")
         subprocess.run(["gcc", "-O3", "-Wall", "-Werror", str(src), "-o", str(exe)], check=True)
 
-        proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        proc = subprocess.Popen(
+            [str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1
+        )
         yield proc
         proc.stdin.close()
         proc.terminate()
@@ -137,7 +139,9 @@ class TestSemanticsFuzz:
         sem_c_binary.stdin.write(f"2 {value} {exponent}\n")
         sem_c_binary.stdin.flush()
         c_res = int(sem_c_binary.stdout.readline().strip())
-        assert py_res == c_res, f"POT mismatch: val={value}, exp={exponent} -> py={py_res}, c={c_res}"
+        assert py_res == c_res, (
+            f"POT mismatch: val={value}, exp={exponent} -> py={py_res}, c={c_res}"
+        )
 
     @settings(max_examples=300)
     @given(
@@ -149,9 +153,13 @@ class TestSemanticsFuzz:
     @example(accum=INT32_MAX, multiplier=(1 << 31) - 1, shift=0)
     @example(accum=INT32_MIN, multiplier=(1 << 31) - 1, shift=31)
     @example(accum=0, multiplier=1 << 30, shift=1)
-    def test_requantize_boundaries(self, sem_c_binary, accum: int, multiplier: int, shift: int) -> None:
+    def test_requantize_boundaries(
+        self, sem_c_binary, accum: int, multiplier: int, shift: int
+    ) -> None:
         py_res = requantize(accum, multiplier, shift)
         sem_c_binary.stdin.write(f"3 {accum} {multiplier} {shift}\n")
         sem_c_binary.stdin.flush()
         c_res = int(sem_c_binary.stdout.readline().strip())
-        assert py_res == c_res, f"Requantize mismatch: acc={accum}, mul={multiplier}, shift={shift} -> py={py_res}, c={c_res}"
+        assert py_res == c_res, (
+            f"Requantize mismatch: acc={accum}, mul={multiplier}, shift={shift} -> py={py_res}, c={c_res}"
+        )

@@ -20,6 +20,7 @@ def temp_dir() -> Path:
     yield Path(d)
     shutil.rmtree(d, ignore_errors=True)
 
+
 #: Self-contained kiln.ir model factory shared by test_spec.py and
 #: test_cli_build.py: a 4-token embedding classifier with no training-data
 #: dependency.  The factory honours the spec loader's ``weights_path`` kwarg
@@ -112,8 +113,7 @@ def toy_spec_factory(toy_project: Path) -> Callable[..., Path]:
             "input": {"name": "tokens", "shape": list(input_shape), "dtype": "uint8"},
             "output": {"name": "label", "classes": ["alpha", "beta", "gamma"]},
             "model": model,
-            "budget": budget
-            or {"ram_arena_max_bytes": 2048, "rom_total_max_bytes": 40960},
+            "budget": budget or {"ram_arena_max_bytes": 2048, "rom_total_max_bytes": 40960},
         }
         if frontend is not None:
             spec["frontend"] = frontend

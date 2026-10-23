@@ -55,11 +55,7 @@ def _first_fit_baseline(requests: list[Request]) -> int:
     for _, (first_op, last_op), size in sorted(
         requests, key=lambda request: (request[1][0], request[0])
     ):
-        blockers = [
-            block
-            for block in placed
-            if block[2] <= last_op and first_op <= block[3]
-        ]
+        blockers = [block for block in placed if block[2] <= last_op and first_op <= block[3]]
         offset = first_fit_offset(size, _spans(blockers))
         placed.append((offset, size, first_op, last_op))
         arena_bytes = max(arena_bytes, offset + size)
@@ -201,9 +197,14 @@ def test_live_blocks_never_share_bytes(requests: list[Request]) -> None:
                 continue
             if last_op < other_first or other_last < first_op:
                 continue  # disjoint lifetimes: sharing bytes is the whole point
-            assert (
-                offset + size <= other_offset or other_offset + other_size <= offset
-            ), (offset, size, first_op, last_op, other_offset, other_size)
+            assert offset + size <= other_offset or other_offset + other_size <= offset, (
+                offset,
+                size,
+                first_op,
+                last_op,
+                other_offset,
+                other_size,
+            )
 
 
 @given(_programs())
@@ -217,11 +218,7 @@ def test_arena_fits_every_block_and_the_live_peak(requests: list[Request]) -> No
     for op in range(first, last + 1):
         peak = max(
             peak,
-            sum(
-                size
-                for _, (first_op, last_op), size in requests
-                if first_op <= op <= last_op
-            ),
+            sum(size for _, (first_op, last_op), size in requests if first_op <= op <= last_op),
         )
 
     assert layout.peak_concurrent_bytes == peak

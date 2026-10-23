@@ -171,13 +171,16 @@ def e2e_exe() -> Path:
         executable = workdir / "kws_e2e.exe"
         result = subprocess.run(
             [
-                "gcc", *GCC_FLAGS,
-                "-I", str(FRONTEND_DIR),
+                "gcc",
+                *GCC_FLAGS,
+                "-I",
+                str(FRONTEND_DIR),
                 str(workdir / "main.c"),
                 str(workdir / "kiln_model.c"),
                 str(FRONTEND_SRC),
                 str(PIPELINE_SRC),
-                "-o", str(executable),
+                "-o",
+                str(executable),
             ],
             capture_output=True,
             text=True,
@@ -244,9 +247,9 @@ def test_kws_end_to_end_c_pipeline_matches_pytorch(e2e_exe: Path) -> None:
     bit_exact = 0
     for (name, truth, pcm), (prediction, features) in zip(cases, outputs):
         # 1. The generated graph must be bit-exact on the C frontend's features.
-        reference_label = run_ref(
-            graph, {"graph_in": features.flatten().tolist()}, weights
-        )["graph_out"][0]
+        reference_label = run_ref(graph, {"graph_in": features.flatten().tolist()}, weights)[
+            "graph_out"
+        ][0]
         bit_exact += int(prediction == reference_label)
         assert prediction == reference_label, (
             f"{name}: compiled C graph disagrees with kiln.ref.run_ref"
