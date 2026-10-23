@@ -120,9 +120,21 @@ def test_propagate_conv1d_lut_maxpool_and_add() -> None:
     weights = {"w_conv": w_conv}
 
     nodes = [
-        Node(OpType.CONV1D, "c1", inputs=["x"], outputs=["conv"], attrs={"weight": "w_conv", "stride": 1, "padding": 0}),
+        Node(
+            OpType.CONV1D,
+            "c1",
+            inputs=["x"],
+            outputs=["conv"],
+            attrs={"weight": "w_conv", "stride": 1, "padding": 0},
+        ),
         Node(OpType.LUT, "l1", inputs=["conv"], outputs=["act"], attrs={"table": lut_relu}),
-        Node(OpType.MAXPOOL1D, "p1", inputs=["act"], outputs=["pool"], attrs={"kernel_size": 2, "stride": 2, "padding": 0}),
+        Node(
+            OpType.MAXPOOL1D,
+            "p1",
+            inputs=["act"],
+            outputs=["pool"],
+            attrs={"kernel_size": 2, "stride": 2, "padding": 0},
+        ),
         Node(OpType.ADD, "a1", inputs=["pool", "pool"], outputs=["res"]),
     ]
     graph = Graph(inputs=["x"], outputs=["res"], nodes=nodes, tensors=tensors)
@@ -208,7 +220,9 @@ def test_propagate_detects_int32_overflow() -> None:
     }
     w_fc = [[127 for _ in range(count)]]
     weights = {"w_fc": w_fc}
-    nodes = [Node(OpType.MATMUL, "fc_overflow", inputs=["x"], outputs=["y"], attrs={"weight": "w_fc"})]
+    nodes = [
+        Node(OpType.MATMUL, "fc_overflow", inputs=["x"], outputs=["y"], attrs={"weight": "w_fc"})
+    ]
     graph = Graph(inputs=["x"], outputs=["y"], nodes=nodes, tensors=tensors)
 
     audit = propagate_intervals(graph, weights, input_intervals={"x": Interval(127, 127)})
