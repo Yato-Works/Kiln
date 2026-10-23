@@ -48,14 +48,15 @@ jobs:
         # the reference; the suite below repeats this for both reference specs.
         run: python -m kiln link examples/hazard/kiln.yaml --run
 
-      - name: Install ARM Embedded Toolchain & QEMU
+      - name: Install ARM Embedded Toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi qemu-user
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
 
-      - name: Phase 4 Cortex-M cross-compile & QEMU replay test
-        # Real embedded binary verification on ARM Cortex-M0+ via QEMU user emulation
-        run: python -m kiln link examples/hazard/kiln.yaml --target cortex-m0plus --run
+      - name: Phase 4 Cortex-M cross-compile & image inspection
+        # Bare-metal target profiles are compile/image-inspection only until a
+        # truthful system-emulator or hardware runner is configured.
+        run: python -m kiln link examples/hazard/kiln.yaml --target cortex-m0plus
 
       - name: Test suite
         # The 107 MB Speech Commands archive is not vendored, so the tests that

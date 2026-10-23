@@ -10,14 +10,10 @@ Design Gates verified:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import pytest
 
 from examples.hazard.graph import DEFAULT_LABELS, HAZARD_CLASSES
 from examples.hazard.synthesize import (
-    CORPUS_PATH,
-    HELD_OUT_PATH,
     MANIFEST_PATH,
     load_corpus,
     load_held_out,

@@ -8,12 +8,8 @@ import pytest
 from hypothesis import example, given, settings, strategies as st
 
 from kiln.ir.sem import (
-    INT8_MAX,
-    INT8_MIN,
     INT32_MAX,
     INT32_MIN,
-    clamp_int8,
-    lut_lookup,
     requantize,
     rounding_divide_by_pot,
     saturating_rounding_doubling_high_mul,

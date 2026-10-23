@@ -85,6 +85,7 @@ def format_link_report(outcome: LinkOutcome, spec: KilnSpec) -> str:
         f"                  Kiln Link Report: {outcome.spec_name}",
         _RULE,
         f"  Toolchain            : {outcome.toolchain}",
+        f"  Target profile       : {outcome.target_profile} ({outcome.execution_mode})",
         f"  Translation units    : {', '.join(path.name for path in outcome.sources)}",
         f"  Linked executable    : {outcome.executable}",
         _THIN,

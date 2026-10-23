@@ -836,7 +836,14 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         compiler = shutil.which(profile.default_cc)
         runner = shutil.which(profile.runner) if profile.runner else None
         add(f"{target} compiler", compiler is not None, compiler or profile.default_cc)
-        add(f"{target} runner", runner is not None, runner or str(profile.runner))
+        if profile.runner is None:
+            add(
+                f"{target} runner",
+                False,
+                f"not configured ({profile.execution})",
+            )
+        else:
+            add(f"{target} runner", runner is not None, runner or profile.runner)
 
     required = [ok for label, ok, _ in checks if label in {"Python", "torch", "yaml", "gcc"}]
     if all(required):

@@ -60,6 +60,8 @@ class LinkOutcome:
     vectors: tuple[tuple[int, ...], ...]
     predictions: tuple[int, ...]
     toolchain: str
+    target_profile: str = "host"
+    execution_mode: str = "native"
     symbols_inspected: bool = True
 
     @property
@@ -170,5 +172,7 @@ def link_spec(
         vectors=vectors,
         predictions=predictions,
         toolchain=toolchain.cc,
+        target_profile=toolchain.profile.name,
+        execution_mode=toolchain.profile.execution,
         symbols_inspected=model_undefined is not None,
     )

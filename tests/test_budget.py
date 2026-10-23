@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from kiln.budget.report import audit_graph, format_budget_certificate
 from kiln.backend.c99.emit_c import emit_c
 from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc

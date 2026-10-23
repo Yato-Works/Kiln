@@ -3,12 +3,10 @@ from __future__ import annotations
 import pytest
 from kiln.analysis.interval import (
     Interval,
-    IntervalAudit,
-    NodeIntervalAudit,
     propagate_intervals,
 )
 from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
-from kiln.ir.sem import INT8_MAX, INT8_MIN, INT32_MAX, INT32_MIN
+from kiln.ir.sem import INT32_MAX, INT32_MIN
 from kiln.spec import load_spec
 from kiln.spec.loader import resolve_model_graph
 

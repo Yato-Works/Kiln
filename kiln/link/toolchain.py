@@ -10,9 +10,11 @@ rather than asserted.
 
 The compiler is discovered, never assumed: an explicit ``--cc`` path, then
 ``$KILN_CC``, then ``gcc`` / ``cc`` / ``clang`` / ``arm-none-eabi-gcc`` on the
-PATH.  A cross toolchain therefore works through the same code path once a real
-target profile exists (Phase 4's firmware milestone); on a host without any
-compiler the command reports a clear error instead of a traceback.
+PATH. A cross toolchain therefore works through the same code path for
+compilation and image inspection. Bare-metal profiles are deliberately
+compile-only until a truthful system-emulator or hardware runner is configured;
+on a host without any compiler the command reports a clear error instead of a
+traceback.
 """
 
 from __future__ import annotations
@@ -65,6 +67,7 @@ class TargetProfile:
     link_flags: tuple[str, ...] = ()
     runner: str | None = None
     default_cc: str = "gcc"
+    execution: str = "native"
 
 
 TARGET_PROFILES: Mapping[str, TargetProfile] = {
@@ -73,22 +76,22 @@ TARGET_PROFILES: Mapping[str, TargetProfile] = {
         name="cortex-m0plus",
         arch_flags=("-mcpu=cortex-m0plus", "-mthumb"),
         link_flags=("-mcpu=cortex-m0plus", "-mthumb", "--specs=nosys.specs"),
-        runner="qemu-arm",
         default_cc="arm-none-eabi-gcc",
+        execution="bare-metal-compile-only",
     ),
     "cortex-m4": TargetProfile(
         name="cortex-m4",
         arch_flags=("-mcpu=cortex-m4", "-mthumb"),
         link_flags=("-mcpu=cortex-m4", "-mthumb", "--specs=nosys.specs"),
-        runner="qemu-arm",
         default_cc="arm-none-eabi-gcc",
+        execution="bare-metal-compile-only",
     ),
     "riscv32": TargetProfile(
         name="riscv32",
         arch_flags=("-march=rv32imc", "-mabi=ilp32"),
         link_flags=("-march=rv32imc", "-mabi=ilp32"),
-        runner="qemu-riscv32",
         default_cc="riscv64-unknown-elf-gcc",
+        execution="bare-metal-compile-only",
     ),
 }
 
@@ -204,8 +207,13 @@ def link_executable(toolchain: Toolchain, objects: Sequence[Path], exe: Path) ->
 
 
 def run_executable(toolchain: Toolchain, exe: Path) -> str:
-    """Runs a linked artifact (directly on host or via target runner e.g. qemu-arm)."""
+    """Runs a linked artifact when the profile has a truthful execution runner."""
     runner = toolchain.profile.runner
+    if toolchain.profile.execution != "native" and runner is None:
+        raise ToolchainError(
+            f"target '{toolchain.profile.name}' is {toolchain.profile.execution}; "
+            "--run requires a configured hardware or system-emulator runner"
+        )
     if runner is not None:
         resolved_runner = shutil.which(runner)
         if not resolved_runner:

@@ -13,7 +13,6 @@ unavailable instead of guessing.
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
@@ -357,6 +356,18 @@ def test_target_profiles_definition() -> None:
     m0 = TARGET_PROFILES["cortex-m0plus"]
     assert "-mcpu=cortex-m0plus" in m0.arch_flags
     assert m0.default_cc == "arm-none-eabi-gcc"
+    assert m0.execution == "bare-metal-compile-only"
+    assert m0.runner is None
+
+
+def test_bare_metal_profiles_refuse_untruthful_replay(tmp_path: Path) -> None:
+    from kiln.link.toolchain import TARGET_PROFILES, Toolchain, run_executable
+
+    toolchain = Toolchain(cc="arm-none-eabi-gcc", profile=TARGET_PROFILES["cortex-m0plus"])
+    with pytest.raises(
+        ToolchainError, match="requires a configured hardware or system-emulator runner"
+    ):
+        run_executable(toolchain, tmp_path / "firmware.elf")
 
 
 def test_detect_toolchain_rejects_unknown_target() -> None:

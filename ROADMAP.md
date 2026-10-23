@@ -15,9 +15,9 @@ release acceptance criteria live in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 | **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
 | **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | DONE (M2.5 open) |
 | **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml` + `kiln build` (予算ゲート)、コンパイル時アーキテクチャ探索 `kiln search` (RAM/ROM/容量パレート) 完了; 自動タスク振り分けは未着手 | IN PROGRESS |
-| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` (厳格コンパイル + リンク + イメージ計測 + リプレイ) 完了、区間境界伝播 M4.2 (`kiln audit --intervals` / 証明書の Accumulator Safety 行) 完了; 残存能力監査 (Linear Probing)、実機ファーム検証は未着手 | IN PROGRESS |
+| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` の厳格コンパイル + リンク + イメージ計測、区間境界伝播 M4.2 (`kiln audit --intervals` / 証明書の Accumulator Safety 行) 完了; 真実性のあるリプレイ、残存能力監査 (Linear Probing)、実機ファーム検証は未着手 | IN PROGRESS |
 | **5** | **ムーンショット (Moonshots)** | 核を汚さない実験ブランチでの賭け | 論理ゲート網バックエンド、CBMC/Frama-C 形式検証、決定木/DNF 抽出、オンデバイス整数SGD | EXPERIMENTAL |
-| **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | `qemu-user` クロス検証、仕様書先出し、再現可能ビルド、3コマンドのHello World | FUTURE |
+| **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | 真実性のある system-emulator / 実機クロス検証、仕様書先出し、再現可能ビルド、3コマンドのHello World | FUTURE |
 
 ---
 
