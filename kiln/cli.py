@@ -13,8 +13,8 @@ from typing import Any
 
 from .backend.c99.emit_c import emit_c, write_c
 from .budget.report import audit_graph, format_budget_certificate
-from .frontend.pytorch import export_to_kir
 from .ir.kir import DType
+from .ir.serialization import dumps_bundle, loads_bundle
 from .ref.ref import run_ref
 from .link import ToolchainError, budget_violations, format_link_report, link_spec
 from .search import SearchRow, run_search
@@ -22,6 +22,13 @@ from .search.report import format_search_report, search_results_csv
 from .spec import load_spec, resolve_model_graph
 from .spec.pipeline import SafetyViolationError, emit_spec_artifacts
 from .link.toolchain import TARGET_PROFILES
+
+
+def _export_model_to_kir(model: Any, dummy_input: Any) -> tuple[Any, dict[str, Any]]:
+    """Import the PyTorch frontend only for commands that receive a model."""
+    from .frontend.pytorch import export_to_kir
+
+    return export_to_kir(model, dummy_input)
 
 
 # ANSI Color formatting
@@ -109,7 +116,7 @@ def _load_model_and_input(model_path_str: str, entry_point: str | None = None) -
 def cmd_compile(args: argparse.Namespace) -> int:
     try:
         model, dummy_input = _load_model_and_input(args.model_path, args.entry_point)
-        graph, weights = export_to_kir(model, dummy_input)
+        graph, weights = _export_model_to_kir(model, dummy_input)
 
         # The safety gate runs before anything is written: an int32 accumulator
         # overflow is a miscompile, not a budgeting preference, so no C is
@@ -154,6 +161,58 @@ def cmd_compile(args: argparse.Namespace) -> int:
         return 0
     except Exception as e:
         print(_color(f"[ERROR] Compilation failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
+        return 1
+
+
+def cmd_export_kir(args: argparse.Namespace) -> int:
+    """Export a PyTorch model into a portable KIR graph + weights bundle."""
+    try:
+        model, dummy_input = _load_model_and_input(args.model_path, args.entry_point)
+        graph, weights = _export_model_to_kir(model, dummy_input)
+        output = Path(args.output)
+        output.write_text(dumps_bundle(graph, weights) + "\n", encoding="utf-8")
+        print(f"[SUCCESS] Exported {args.model_path} -> {output}")
+        print(
+            f"           tensors={len(graph.tensors)}, nodes={len(graph.nodes)}, "
+            f"weights={len(weights)}"
+        )
+        return 0
+    except Exception as exc:
+        print(_color(f"[ERROR] KIR export failed: {exc}", Style.BOLD + Style.RED), file=sys.stderr)
+        return 1
+
+
+def cmd_compile_kir(args: argparse.Namespace) -> int:
+    """Compile a KIR bundle without importing PyTorch."""
+    try:
+        bundle_path = Path(args.bundle)
+        graph, weights = loads_bundle(bundle_path.read_text(encoding="utf-8"))
+        report = audit_graph(graph, weights, alignment=args.alignment)
+        if not report.int32_overflow_free:
+            print(_color(format_budget_certificate(report), Style.CYAN))
+            print(
+                _color(
+                    "[SAFETY VIOLATION] KIR bundle refused; no C emitted",
+                    Style.BOLD + Style.RED,
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        runtime_header = args.runtime_header
+        if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
+            runtime_header = None
+        output = Path(args.output)
+        write_c(output, graph, weights, alignment=args.alignment, runtime_header=runtime_header)
+        print(_color(format_budget_certificate(report), Style.CYAN))
+        print(
+            _color("[SUCCESS]", Style.BOLD + Style.GREEN) + f" Compiled {bundle_path} -> {output}"
+        )
+        return 0
+    except Exception as exc:
+        print(
+            _color(f"[ERROR] KIR compilation failed: {exc}", Style.BOLD + Style.RED),
+            file=sys.stderr,
+        )
         return 1
 
 
@@ -387,7 +446,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
             graph, weights = loaded.graph, loaded.weights
         else:
             model, dummy_input = _load_model_and_input(model_str)
-            graph, weights = export_to_kir(model, dummy_input)
+            graph, weights = _export_model_to_kir(model, dummy_input)
 
         report = audit_graph(graph, weights, alignment=args.alignment)
 
@@ -517,7 +576,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     try:
         model, dummy_input = _load_model_and_input(args.model_path)
-        graph, weights = export_to_kir(model, dummy_input)
+        graph, weights = _export_model_to_kir(model, dummy_input)
 
         c_code = emit_c(graph, weights, runtime_header=None)
 
@@ -716,6 +775,28 @@ def create_parser() -> argparse.ArgumentParser:
         "--runtime-header", default="kiln_runtime.h", help="Runtime header to include (or None)"
     )
 
+    # export-kir / compile-kir
+    p_export_kir = subparsers.add_parser(
+        "export-kir", help="Export a PyTorch model into a portable KIR bundle"
+    )
+    p_export_kir.add_argument("model_path", help="Path to PyTorch model .py file")
+    p_export_kir.add_argument("-o", "--output", required=True, help="Output KIR bundle JSON path")
+    p_export_kir.add_argument(
+        "--entry-point", default=None, help="Entry point class or function name"
+    )
+
+    p_compile_kir = subparsers.add_parser(
+        "compile-kir", help="Compile a KIR bundle without importing PyTorch"
+    )
+    p_compile_kir.add_argument("bundle", help="Path to a KIR bundle JSON file")
+    p_compile_kir.add_argument("-o", "--output", default="model.c", help="Output C source path")
+    p_compile_kir.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
+    p_compile_kir.add_argument(
+        "--runtime-header", default=None, help="Runtime header to include (or None)"
+    )
+
     # build (declarative kiln.yaml pipeline)
     p_build = subparsers.add_parser("build", help="Build a declarative kiln.yaml task spec to C99")
     p_build.add_argument("spec", help="Path to the kiln.yaml task specification")
@@ -820,6 +901,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "compile":
         return cmd_compile(args)
+    elif args.command == "export-kir":
+        return cmd_export_kir(args)
+    elif args.command == "compile-kir":
+        return cmd_compile_kir(args)
     elif args.command == "build":
         return cmd_build(args)
     elif args.command == "search":

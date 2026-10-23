@@ -261,6 +261,19 @@ tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCMâ†
   *observed* on a linked image (`kiln link`): the model object references no
   allocation entry point, the linked `.bss` reserves the audited arena, and the
   labels a linked program prints match the reference oracle.
+
+### Portable KIR bundles
+
+The frontend can be separated from compilation entirely:
+
+```bash
+python -m kiln export-kir examples/kws/model.py -o model.kir.json
+python -m kiln compile-kir model.kir.json -o model.c --runtime-header None
+```
+
+The second command consumes only the versioned KIR bundle and quantized weights;
+it does not import PyTorch. This is the foundation for editing, reviewing, and
+reproducing KIR outside the Python frontend.
 * Not guaranteed (yet): execution on real silicon (the latency figure is an
   upper-bound cycle estimate, while `kiln link` supports target profiles for host,
   ARM Cortex-M0+/M4 and RISC-V, verified in CI under QEMU emulation), and bit-identical

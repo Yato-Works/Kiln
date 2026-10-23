@@ -168,6 +168,11 @@ operations, dynamic control flow, and shape-dependent behavior with a structured
 diagnostic before serialization. MessagePack may be added as a transport later;
 it must preserve this schema and version contract.
 
+The `kiln.kir.bundle` v1 format wraps a KIR document with its quantized weight
+arrays. `kiln export-kir model.py -o model.kir.json` creates the bundle and
+`kiln compile-kir model.kir.json -o model.c --runtime-header None` compiles it
+without importing PyTorch. Bundle weights are data, never executable Python.
+
 # Static safety certificate assumptions
 
 `kiln.analysis.interval` performs interval boundary propagation over the full

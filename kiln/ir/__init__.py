@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from . import kir, plan, sem
 from . import serialization
+from .serialization import bundle_from_dict, bundle_to_dict, dumps_bundle, loads_bundle
 from .kir import DType, Graph, LoweredGraph, Node, OpType, QuantParam, TensorDesc
 from .plan import Lifetime, MemoryPlan, OpStep, TensorInfo, allocate_arena, calculate_liveness
 from .sem import (
@@ -17,6 +18,10 @@ __all__ = (
     "plan",
     "sem",
     "serialization",
+    "bundle_from_dict",
+    "bundle_to_dict",
+    "dumps_bundle",
+    "loads_bundle",
     "DType",
     "Graph",
     "LoweredGraph",

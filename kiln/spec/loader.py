@@ -11,14 +11,13 @@ import inspect
 import os
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
-import torch
-import torch.nn as nn
-
-from ..frontend.pytorch import export_to_kir
 from ..ir.kir import Graph
 from .schema import KilnSpec
+
+if TYPE_CHECKING:
+    import torch.nn as nn
 
 __all__ = ("LoadedModel", "resolve_model_graph")
 
@@ -102,6 +101,7 @@ def resolve_model_graph(
     """
     resolved_entry = entry_point or spec.model.entry_point
     target = _import_entry_point(resolved_entry, spec.base_dir)
+    import torch.nn as nn
 
     # Case 1: Target is a callable function/factory
     if callable(target) and not (isinstance(target, type) and issubclass(target, nn.Module)):
@@ -159,6 +159,10 @@ def resolve_model_graph(
 
 def _export_module_to_loaded(model: nn.Module, spec: KilnSpec) -> LoadedModel:
     """Loads weights if provided and exports the PyTorch module into KIR."""
+    import torch
+
+    from ..frontend.pytorch import export_to_kir
+
     if spec.model.weights:
         w_path = spec.resolve_path(spec.model.weights)
         if w_path.exists():

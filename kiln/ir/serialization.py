@@ -14,6 +14,8 @@ from .kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
 
 KIR_SCHEMA = "kiln.kir"
 KIR_VERSION = 1
+KIR_BUNDLE_SCHEMA = "kiln.kir.bundle"
+KIR_BUNDLE_VERSION = 1
 
 
 def _json_value(value: Any) -> Any:
@@ -124,3 +126,43 @@ def loads_graph(text: str) -> Graph:
     if not isinstance(document, Mapping):
         raise ValueError("KIR document must be a JSON object")
     return graph_from_dict(document)
+
+
+def bundle_to_dict(graph: Graph, weights: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a portable KIR graph plus quantized weights bundle."""
+    return {
+        "schema": KIR_BUNDLE_SCHEMA,
+        "version": KIR_BUNDLE_VERSION,
+        "graph": graph_to_dict(graph),
+        "weights": _json_value(weights),
+    }
+
+
+def bundle_from_dict(document: Mapping[str, Any]) -> tuple[Graph, dict[str, Any]]:
+    """Decode and validate a portable KIR bundle."""
+    if document.get("schema") != KIR_BUNDLE_SCHEMA or document.get("version") != KIR_BUNDLE_VERSION:
+        raise ValueError(
+            f"unsupported KIR bundle: expected {KIR_BUNDLE_SCHEMA!r} version {KIR_BUNDLE_VERSION}"
+        )
+    graph_document = document.get("graph")
+    raw_weights = document.get("weights")
+    if not isinstance(graph_document, Mapping) or not isinstance(raw_weights, Mapping):
+        raise ValueError("KIR bundle requires object-valued 'graph' and 'weights'")
+    graph = graph_from_dict(graph_document)
+    weights = {str(name): value for name, value in raw_weights.items()}
+    return graph, weights
+
+
+def dumps_bundle(graph: Graph, weights: Mapping[str, Any], *, indent: int | None = 2) -> str:
+    """Serialize a complete graph and weights bundle deterministically."""
+    return json.dumps(
+        bundle_to_dict(graph, weights), indent=indent, sort_keys=True, separators=(",", ": ")
+    )
+
+
+def loads_bundle(text: str) -> tuple[Graph, dict[str, Any]]:
+    """Deserialize a complete graph and weights bundle."""
+    document = json.loads(text)
+    if not isinstance(document, Mapping):
+        raise ValueError("KIR bundle must be a JSON object")
+    return bundle_from_dict(document)
