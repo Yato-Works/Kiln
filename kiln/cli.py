@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import importlib.metadata
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ from .search import SearchRow, run_search
 from .search.report import format_search_report, search_results_csv
 from .spec import load_spec, resolve_model_graph
 from .spec.pipeline import SafetyViolationError, emit_spec_artifacts
+from .link.toolchain import TARGET_PROFILES
 
 
 # ANSI Color formatting
@@ -655,6 +657,44 @@ def cmd_ops(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(_args: argparse.Namespace) -> int:
+    """Report the local tools needed for a reproducible Kiln workflow."""
+    checks: list[tuple[str, bool, str]] = []
+
+    def add(label: str, ok: bool, detail: str) -> None:
+        checks.append((label, ok, detail))
+        status = "OK" if ok else "MISSING"
+        print(f"[{status:<7}] {label:<18} {detail}")
+
+    add("Python", sys.version_info >= (3, 10), sys.version.split()[0])
+    for import_name, distribution in (("torch", "torch"), ("yaml", "PyYAML"), ("pytest", "pytest")):
+        try:
+            version = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError:
+            add(import_name, False, "install the test environment")
+        else:
+            add(import_name, True, version)
+
+    for name in ("gcc", "clang", "ruff", "mypy"):
+        path = shutil.which(name)
+        add(name, path is not None, path or "not on PATH")
+
+    for target, profile in TARGET_PROFILES.items():
+        if target == "host":
+            continue
+        compiler = shutil.which(profile.default_cc)
+        runner = shutil.which(profile.runner) if profile.runner else None
+        add(f"{target} compiler", compiler is not None, compiler or profile.default_cc)
+        add(f"{target} runner", runner is not None, runner or str(profile.runner))
+
+    required = [ok for label, ok, _ in checks if label in {"Python", "torch", "yaml", "gcc"}]
+    if all(required):
+        print("[READY  ] Kiln core workflow is available")
+        return 0
+    print("[BLOCKED] Install the missing core requirements before building models", file=sys.stderr)
+    return 1
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kiln",
@@ -768,6 +808,9 @@ def create_parser() -> argparse.ArgumentParser:
     # ops
     subparsers.add_parser("ops", help="List supported Kiln IR operations")
 
+    # doctor
+    subparsers.add_parser("doctor", help="Check local tools for a reproducible Kiln workflow")
+
     return parser
 
 
@@ -789,6 +832,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_verify(args)
     elif args.command == "ops":
         return cmd_ops(args)
+    elif args.command == "doctor":
+        return cmd_doctor(args)
     return 0
 
 

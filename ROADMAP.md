@@ -2,6 +2,9 @@
 
 **Goal**: Build the "QEMU of TinyML" — an open, zero-malloc, bit-exact compiler framework that allows anyone to forge deterministic, specialized C99 inference engines from a simple task specification (`kiln.yaml`).
 
+The adopted product direction, target users, non-negotiable guarantees, and
+release acceptance criteria live in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
+
 ---
 
 ## Roadmap Overview

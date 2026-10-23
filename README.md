@@ -69,6 +69,8 @@ strong as its tests.
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
 [KIR.md](KIR.md) is the frozen intermediate-representation contract.
+The project direction and release acceptance criteria are defined in
+[PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 
 ## Quick start
 
@@ -81,6 +83,7 @@ pip install -e ".[test]"
 Three commands — no dataset download needed:
 
 ```bash
+python -m kiln doctor                       # 0. check the local toolchain
 python -m kiln ops                            # 1. the 7 IR operations (the whole instruction set)
 python -m kiln audit examples/kws/model.py    # 2. static footprint certificate (add --json for machines)
 python -m pytest tests/ -q                    # 3. every guarantee (all tests, ~2 min)
