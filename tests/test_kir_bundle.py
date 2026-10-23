@@ -40,3 +40,16 @@ def test_compile_kir_cli_consumes_bundle(tmp_path: Path) -> None:
     assert main(["compile-kir", str(bundle), "-o", str(output), "--runtime-header", "None"]) == 0
     assert output.is_file()
     assert "kiln_predict" in output.read_text(encoding="utf-8")
+
+
+def test_validate_and_inspect_kir_cli(tmp_path: Path, capsys) -> None:
+    bundle = tmp_path / "model.kir.json"
+    bundle.write_text(dumps_bundle(_bundle_graph(), {}), encoding="utf-8")
+
+    assert main(["validate", str(bundle)]) == 0
+    assert "[VALID]" in capsys.readouterr().out
+
+    assert main(["inspect", str(bundle), "--json"]) == 0
+    output = capsys.readouterr().out
+    assert '"arena_ram_bytes"' in output
+    assert '"int32_overflow_free": true' in output

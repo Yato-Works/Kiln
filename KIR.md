@@ -172,6 +172,8 @@ The `kiln.kir.bundle` v1 format wraps a KIR document with its quantized weight
 arrays. `kiln export-kir model.py -o model.kir.json` creates the bundle and
 `kiln compile-kir model.kir.json -o model.c --runtime-header None` compiles it
 without importing PyTorch. Bundle weights are data, never executable Python.
+`kiln validate` is the fail-closed CI gate for the bundle, while `kiln inspect`
+exposes the graph and certificate as human-readable text or structured JSON.
 
 # Static safety certificate assumptions
 

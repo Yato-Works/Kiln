@@ -216,6 +216,98 @@ def cmd_compile_kir(args: argparse.Namespace) -> int:
         return 1
 
 
+def _load_kir_bundle(path: str) -> tuple[Any, dict[str, Any]]:
+    bundle_path = Path(path)
+    return loads_bundle(bundle_path.read_text(encoding="utf-8"))
+
+
+def cmd_validate_kir(args: argparse.Namespace) -> int:
+    """Validate a KIR bundle and fail closed when safety is not established."""
+    try:
+        graph, weights = _load_kir_bundle(args.bundle)
+        report = audit_graph(graph, weights, alignment=args.alignment)
+        if not report.int32_overflow_free:
+            print(_color(format_budget_certificate(report), Style.CYAN))
+            print(
+                _color(
+                    "[INVALID] KIR safety certificate is unavailable or failed",
+                    Style.BOLD + Style.RED,
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        print(_color("[VALID]", Style.BOLD + Style.GREEN) + f" {args.bundle}")
+        print(
+            f"         nodes={len(graph.nodes)}, tensors={len(graph.tensors)}, "
+            f"arena={report.arena_ram_bytes:,} B, rom={report.total_rom_bytes:,} B, "
+            f"macs={report.total_macs:,}"
+        )
+        return 0
+    except Exception as exc:
+        print(
+            _color(f"[INVALID] KIR validation failed: {exc}", Style.BOLD + Style.RED),
+            file=sys.stderr,
+        )
+        return 1
+
+
+def cmd_inspect_kir(args: argparse.Namespace) -> int:
+    """Inspect a KIR bundle as a human-readable or machine-readable report."""
+    try:
+        graph, weights = _load_kir_bundle(args.bundle)
+        report = audit_graph(graph, weights, alignment=args.alignment)
+        interval = report.interval_audit
+        payload: dict[str, Any] = {
+            "schema": "kiln.kir.bundle",
+            "version": 1,
+            "nodes": [
+                {
+                    "name": node.name,
+                    "op": node.op_type.value,
+                    "inputs": list(node.inputs),
+                    "outputs": list(node.outputs),
+                }
+                for node in graph.nodes
+            ],
+            "tensors": {
+                name: {"shape": list(desc.shape), "dtype": desc.dtype.value}
+                for name, desc in graph.tensors.items()
+            },
+            "weights": sorted(weights),
+            "resources": {
+                "arena_ram_bytes": report.arena_ram_bytes,
+                "total_rom_bytes": report.total_rom_bytes,
+                "total_macs": report.total_macs,
+                "estimated_worst_cycles": report.estimated_worst_cycles,
+            },
+            "interval_analysis": {
+                "available": interval is not None,
+                "int32_overflow_free": report.int32_overflow_free,
+                "min_accum": interval.min_accum if interval else None,
+                "max_accum": interval.max_accum if interval else None,
+            },
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(f"KIR bundle: {args.bundle}")
+            print(f"  graph: {len(graph.nodes)} nodes, {len(graph.tensors)} tensors")
+            print(f"  weights: {len(weights)} ({', '.join(sorted(weights)) or 'none'})")
+            resources = payload["resources"]
+            print(
+                f"  resources: RAM {resources['arena_ram_bytes']:,} B, "
+                f"ROM {resources['total_rom_bytes']:,} B, MACs {resources['total_macs']:,}"
+            )
+            print(f"  int32 safety: {'SAFE' if report.int32_overflow_free else 'NOT VERIFIED'}")
+            print("  operations: " + ", ".join(node.op_type.value for node in graph.nodes))
+        return 0
+    except Exception as exc:
+        print(
+            _color(f"[ERROR] KIR inspection failed: {exc}", Style.BOLD + Style.RED), file=sys.stderr
+        )
+        return 1
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     """Declarative pipeline: kiln.yaml -> resolve model -> audit budget -> emit C99."""
     try:
@@ -797,6 +889,23 @@ def create_parser() -> argparse.ArgumentParser:
         "--runtime-header", default=None, help="Runtime header to include (or None)"
     )
 
+    p_validate_kir = subparsers.add_parser(
+        "validate", help="Validate a KIR bundle and its static safety certificate"
+    )
+    p_validate_kir.add_argument("bundle", help="Path to a KIR bundle JSON file")
+    p_validate_kir.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
+
+    p_inspect_kir = subparsers.add_parser(
+        "inspect", help="Inspect a KIR bundle and its resource certificate"
+    )
+    p_inspect_kir.add_argument("bundle", help="Path to a KIR bundle JSON file")
+    p_inspect_kir.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
+    p_inspect_kir.add_argument("--json", action="store_true", help="Output structured JSON")
+
     # build (declarative kiln.yaml pipeline)
     p_build = subparsers.add_parser("build", help="Build a declarative kiln.yaml task spec to C99")
     p_build.add_argument("spec", help="Path to the kiln.yaml task specification")
@@ -905,6 +1014,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_export_kir(args)
     elif args.command == "compile-kir":
         return cmd_compile_kir(args)
+    elif args.command == "validate":
+        return cmd_validate_kir(args)
+    elif args.command == "inspect":
+        return cmd_inspect_kir(args)
     elif args.command == "build":
         return cmd_build(args)
     elif args.command == "search":

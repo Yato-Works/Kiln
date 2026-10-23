@@ -274,6 +274,10 @@ python -m kiln compile-kir model.kir.json -o model.c --runtime-header None
 The second command consumes only the versioned KIR bundle and quantized weights;
 it does not import PyTorch. This is the foundation for editing, reviewing, and
 reproducing KIR outside the Python frontend.
+
+Use `kiln validate model.kir.json` in CI as a fail-closed safety gate, or
+`kiln inspect model.kir.json --json` to feed graph and resource information into
+other tooling.
 * Not guaranteed (yet): execution on real silicon (the latency figure is an
   upper-bound cycle estimate, while `kiln link` supports target profiles for host,
   ARM Cortex-M0+/M4 and RISC-V, verified in CI under QEMU emulation), and bit-identical
