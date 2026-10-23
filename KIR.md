@@ -152,3 +152,28 @@ int8_t kiln_predict(const uint8_t *input_bytes, int len);
   *(Note for bare-metal targets: On freestanding embedded systems without POSIX `abort()`, `abort()` can be replaced or mapped to a weak trap handler / infinite spin / fault hook `kiln_trap()`)*
 - **Return Value**: Scalar `int8_t` representing the predicted class index from the final `ARGMAX` operation.
 - **Side Effects**: Modifies only `_arena.data` in `.bss`; `input_bytes` is read-only because graph inputs are consumed in place (zero-copy). Zero heap allocation, zero non-local side effects.
+# KIR v1 serialization
+
+KIR v1 is a versioned, language-neutral JSON representation of the validated
+graph. The canonical object has `schema: "kiln.kir"` and `version: 1`, followed
+by `inputs`, `outputs`, `tensors`, and `nodes`. Tensor dtypes use the enum values
+`uint8`, `int8`, and `int32`; quantization is either `null` or an object with a
+Q31 `multiplier` and non-negative `shift`. Node attributes contain JSON values
+only. The Python codec is available through `kiln.ir.serialization` and always
+re-validates a graph after decoding.
+
+KIR v1 intentionally has no dynamic dimensions, executable attributes, Python
+class names, or implicit broadcasting. A frontend must reject unsupported
+operations, dynamic control flow, and shape-dependent behavior with a structured
+diagnostic before serialization. MessagePack may be added as a transport later;
+it must preserve this schema and version contract.
+
+# Static safety certificate assumptions
+
+`kiln.analysis.interval` performs interval boundary propagation over the full
+declared input domain (`[0, 255]` for `uint8`, `[-128, 127]` for `int8`). The
+certificate is sound for the emitted program when the graph, weights, and
+integer semantics remain unchanged. It checks accumulator bounds before
+requantization, then records pre-clamp ranges and saturation. This is a static
+analysis result, not a formal proof of the analyzer implementation; CBMC/SMT
+validation is a planned follow-up.

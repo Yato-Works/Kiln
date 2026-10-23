@@ -16,10 +16,7 @@ arena), and ``kiln.ir.memory`` layers the two graph-wide reductions -- in-place
 
 """
 
-
 from __future__ import annotations
-
-
 
 
 from dataclasses import dataclass
@@ -30,48 +27,28 @@ from typing import Final, Mapping, NamedTuple, Sequence
 from . import arena
 
 
-
-
 __all__ = (
-
     "TensorInfo",
-
     "OpStep",
-
     "Lifetime",
-
     "MemoryPlan",
-
     "calculate_liveness",
-
     "allocate_arena",
-
 )
-
 
 
 DEFAULT_ALIGNMENT: Final = 4
 
 
-
-
-
 @dataclass(frozen=True, slots=True)
-
 class TensorInfo:
-
     name: str
 
     size_bytes: int
 
 
-
-
-
 @dataclass(frozen=True, slots=True)
-
 class OpStep:
-
     op_id: int
 
     inputs: Sequence[str]
@@ -79,23 +56,14 @@ class OpStep:
     outputs: Sequence[str]
 
 
-
-
-
 class Lifetime(NamedTuple):
-
     first_op: int
 
     last_op: int
 
 
-
-
-
 @dataclass(frozen=True, slots=True)
-
 class MemoryPlan:
-
     total_arena_bytes: int
 
     offsets: Mapping[str, int]
@@ -104,10 +72,6 @@ class MemoryPlan:
     #: Allocator strategy that produced ``offsets`` (see ``kiln.ir.arena``).
 
     strategy: str = "insertion-order/first-fit"
-
-
-
-
 
 
 def calculate_liveness(
@@ -155,14 +119,7 @@ def calculate_liveness(
                 raise KeyError(f"unknown graph output: {out}")
             last[out] = final_op
 
-    return {
-        name: Lifetime(first[name], last[name])
-        for name in first
-    }
-
-
-
-
+    return {name: Lifetime(first[name], last[name]) for name in first}
 
 
 def _align_up(value: int, alignment: int) -> int:
@@ -170,213 +127,122 @@ def _align_up(value: int, alignment: int) -> int:
     return -(-value // alignment) * alignment
 
 
-
-
-
 def _placement_order(
-
     tensors: Mapping[str, TensorInfo],
-
     lifetimes: Mapping[str, Lifetime | tuple[int, int]],
-
     alignment: int,
-
 ) -> list[tuple[str, Lifetime, int]]:
 
     requests: list[tuple[str, Lifetime, int]] = []
 
-
-
     for name, bounds in lifetimes.items():
-
         info = tensors.get(name)
 
-
-
         if info is None:
-
             raise KeyError(f"unknown tensor: {name}")
-
-
 
         lifetime = Lifetime(*bounds)
 
-
-
         if lifetime.first_op < 0:
-
             raise ValueError(f"invalid lifetime: {name}")
-
-
 
         if lifetime.last_op < lifetime.first_op:
-
             raise ValueError(f"invalid lifetime: {name}")
-
-
 
         size = _align_up(info.size_bytes, alignment)
 
         requests.append((name, lifetime, size))
 
-
-
     requests.sort(key=lambda item: (item[1].first_op, item[0]))
-
-
 
     return requests
 
 
-
-
-
 def _resolve_aliases(
-
     aliases: Mapping[str, str] | None,
-
     lifetimes: Mapping[str, Lifetime | tuple[int, int]],
-
 ) -> dict[str, str]:
-
     """Maps every aliased tensor name to the root tensor owning its bytes."""
 
     if not aliases:
-
         return {}
-
-
 
     chains: dict[str, str] = {}
 
     for target, source in aliases.items():
-
         for name in (target, source):
-
             if name not in lifetimes:
-
                 raise KeyError(f"unknown tensor: {name}")
 
-
-
         if target == source:
-
             raise ValueError(f"self alias: {target}")
 
-
-
         chains[target] = source
-
-
 
     roots: dict[str, str] = {}
 
     for target in chains:
-
         chain = [target]
 
         node = chains[target]
 
         while node in chains and node not in chain:
-
             chain.append(node)
 
             node = chains[node]
 
-
-
         if node in chain:
-
             raise ValueError(f"cyclic alias: {target}")
 
-
-
         for member in chain:
-
             roots[member] = node
-
-
 
     return roots
 
 
-
-
-
 def _group_requests(
-
     requests: Sequence[tuple[str, Lifetime, int]],
-
     root_of: Mapping[str, str],
-
 ) -> list[tuple[str, Lifetime, int]]:
-
     """Merges aliased tensors into one request per physical buffer."""
 
     if not root_of:
-
         return list(requests)
-
-
 
     merged: dict[str, tuple[Lifetime, int]] = {}
 
     for name, lifetime, size in requests:
-
         root = root_of.get(name, name)
 
         current = merged.get(root)
 
         if current is None:
-
             merged[root] = (lifetime, size)
 
             continue
 
-
-
         previous, previous_size = current
 
         merged[root] = (
-
             Lifetime(
-
                 min(previous.first_op, lifetime.first_op),
-
                 max(previous.last_op, lifetime.last_op),
-
             ),
-
             max(previous_size, size),
-
         )
 
-
-
     return sorted(
-
         ((root, lifetime, size) for root, (lifetime, size) in merged.items()),
-
         key=lambda item: (item[1].first_op, item[0]),
-
     )
 
 
-
-
-
 def allocate_arena(
-
     tensors: Mapping[str, TensorInfo],
-
     lifetimes: Mapping[str, Lifetime | tuple[int, int]],
-
     alignment: int = DEFAULT_ALIGNMENT,
-
     aliases: Mapping[str, str] | None = None,
-
 ) -> MemoryPlan:
-
     """Places every tensor inside one arena.
 
 
@@ -406,61 +272,31 @@ def allocate_arena(
     """
 
     if alignment <= 0:
-
         raise ValueError(f"invalid alignment: {alignment}")
 
-
-
     for tensor in tensors.values():
-
         if tensor.size_bytes < 0:
-
             raise ValueError(f"negative tensor size: {tensor.name}")
-
-
 
     root_of = _resolve_aliases(aliases, lifetimes)
 
     requests = _group_requests(
-
         _placement_order(tensors, lifetimes, alignment),
-
         root_of,
-
     )
-
-
 
     layout = arena.place(
-
-        [
-
-            (name, (lifetime.first_op, lifetime.last_op), size)
-
-            for name, lifetime, size in requests
-
-        ]
-
+        [(name, (lifetime.first_op, lifetime.last_op), size) for name, lifetime, size in requests]
     )
-
-
 
     offsets = dict(layout.offsets)
 
     for member, root in root_of.items():
-
         offsets[member] = offsets[root]
 
-
-
     return MemoryPlan(
-
         total_arena_bytes=layout.arena_bytes,
-
         offsets=MappingProxyType(offsets),
-
         peak_concurrent_bytes=layout.peak_concurrent_bytes,
-
         strategy=layout.strategy,
-
     )

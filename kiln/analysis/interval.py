@@ -1,12 +1,12 @@
-from __future__ import annotations
-
 """Interval Boundary Propagation (IBP) for Kiln IR.
 
 Calculates static [min, max] value intervals for all tensors and intermediate
-accumulators to mathematically guarantee:
-  1. 32-bit signed accumulator overflow freedom (no INT32_MIN/INT32_MAX overflow).
-  2. Requantization clamping / saturation behaviour (identifies whether clamping triggers).
+accumulators.  Under the full declared input dtype domain and the exact integer
+semantics of ``kiln.ir.sem``, a successful audit establishes that the emitted
+accumulator ranges fit int32.  The analyzer itself is not formally verified.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
@@ -85,7 +85,9 @@ def _safe_requantize(accum: int, multiplier: int, shift: int) -> int:
     return requantize(clamped_accum, multiplier, shift)
 
 
-def _weight_values(name: str, weights: Mapping[str, Any]) -> tuple[tuple[int, ...], tuple[int, ...]]:
+def _weight_values(
+    name: str, weights: Mapping[str, Any]
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
     try:
         raw = weights[name]
     except KeyError:
@@ -169,8 +171,14 @@ def propagate_intervals(
 
             tensor_bounds[out_name] = Interval(out_lo, out_hi)
             node_audits[node.name] = NodeIntervalAudit(
-                node.name, node.op_type, accum_lo, accum_hi, accum_fits,
-                preclamp_lo, preclamp_hi, saturates,
+                node.name,
+                node.op_type,
+                accum_lo,
+                accum_hi,
+                accum_fits,
+                preclamp_lo,
+                preclamp_hi,
+                saturates,
             )
 
         elif node.op_type is OpType.MATMUL:
@@ -212,8 +220,14 @@ def propagate_intervals(
 
             tensor_bounds[out_name] = Interval(out_lo, out_hi)
             node_audits[node.name] = NodeIntervalAudit(
-                node.name, node.op_type, accum_lo, accum_hi, accum_fits,
-                preclamp_lo, preclamp_hi, saturates,
+                node.name,
+                node.op_type,
+                accum_lo,
+                accum_hi,
+                accum_fits,
+                preclamp_lo,
+                preclamp_hi,
+                saturates,
             )
 
         elif node.op_type is OpType.ADD:
@@ -238,8 +252,14 @@ def propagate_intervals(
 
             tensor_bounds[out_name] = Interval(out_lo, out_hi)
             node_audits[node.name] = NodeIntervalAudit(
-                node.name, node.op_type, accum_lo, accum_hi, accum_fits,
-                preclamp_lo, preclamp_hi, saturates,
+                node.name,
+                node.op_type,
+                accum_lo,
+                accum_hi,
+                accum_fits,
+                preclamp_lo,
+                preclamp_hi,
+                saturates,
             )
 
         elif node.op_type is OpType.LUT:
@@ -264,12 +284,16 @@ def propagate_intervals(
             node_audits[node.name] = NodeIntervalAudit(node.name, node.op_type)
 
         else:
-            raise NotImplementedError(f"Unsupported op type for interval propagation: {node.op_type}")
+            raise NotImplementedError(
+                f"Unsupported op type for interval propagation: {node.op_type}"
+            )
 
     all_acc_fits = all(na.accum_fits_int32 for na in node_audits.values())
-    accum_audits = [na for na in node_audits.values() if na.accum_lo is not None and na.accum_hi is not None]
-    min_accum = min((na.accum_lo for na in accum_audits), default=None)
-    max_accum = max((na.accum_hi for na in accum_audits), default=None)
+    accum_audits = [
+        na for na in node_audits.values() if na.accum_lo is not None and na.accum_hi is not None
+    ]
+    min_accum = min((na.accum_lo for na in accum_audits if na.accum_lo is not None), default=None)
+    max_accum = max((na.accum_hi for na in accum_audits if na.accum_hi is not None), default=None)
     saturating_ops = sum(1 for na in node_audits.values() if na.saturates)
 
     return IntervalAudit(
@@ -281,4 +305,3 @@ def propagate_intervals(
         min_accum=min_accum,
         max_accum=max_accum,
     )
-

@@ -1,6 +1,5 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -33,10 +32,7 @@ class BudgetReport:
         (a custom or unlowered op, see ``audit_graph``); such a graph has no
         *verified* overflow freedom, so the gate closes (fail-closed).
         """
-        return (
-            self.interval_audit is not None
-            and self.interval_audit.int32_overflow_free
-        )
+        return self.interval_audit is not None and self.interval_audit.int32_overflow_free
 
 
 def _count_weight_bytes(value: Any) -> int:
@@ -73,7 +69,11 @@ def audit_graph(
         elif node.op_type is OpType.LUT:
             num_luts += 1
 
-    weights_rom = sum(_count_weight_bytes(weights[w_name]) for w_name in referenced_weight_names if w_name in weights)
+    weights_rom = sum(
+        _count_weight_bytes(weights[w_name])
+        for w_name in referenced_weight_names
+        if w_name in weights
+    )
     lut_rom = num_luts * 256
     total_rom = weights_rom + lut_rom
 
@@ -91,7 +91,7 @@ def audit_graph(
             kernel = node.attrs.get("kernel_size")
             if kernel is None:
                 w_name = node.attrs.get("weight")
-                if w_name in weights:
+                if isinstance(w_name, str) and w_name in weights:
                     kernel = len(weights[w_name][0][0])
                 else:
                     kernel = 1
@@ -147,7 +147,12 @@ def audit_graph(
 
 
 def format_budget_certificate(report: BudgetReport) -> str:
-    """Formats the BudgetReport into a C comment block ASCII certificate."""
+    """Formats a static resource and interval-safety certificate.
+
+    The accumulator line is an interval-analysis result under the assumptions
+    documented in ``KIR.md``; it is not a machine-checked proof of the Python
+    analyzer itself.
+    """
     if report.interval_audit is not None:
         if not report.interval_audit.int32_overflow_free:
             accum_line = "WARNING: Potential int32 overflow detected"
@@ -178,5 +183,7 @@ def format_budget_certificate(report: BudgetReport) -> str:
  *   Dynamic Allocation    :        0 bytes (strictly zero-malloc guarantee)
  *   Determinism           : Bit-exact verified (C99 fixed-point integer)
  *   Accumulator Safety    : {accum_line}
+ *   Safety Method         : interval boundary propagation (static analysis)
+ *   Safety Assumptions    : full declared input dtype domain; exact integer semantics
  * =========================================================================
  */"""

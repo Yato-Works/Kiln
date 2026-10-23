@@ -82,15 +82,9 @@ def plan_graph_memory(
     aliases = plan_inplace_aliases(graph)
     liveness = calculate_liveness(graph.to_op_steps(), graph_outputs=graph.outputs)
     arena_tensors = {
-        name: info
-        for name, info in graph.to_tensor_infos().items()
-        if name not in graph.inputs
+        name: info for name, info in graph.to_tensor_infos().items() if name not in graph.inputs
     }
-    arena_liveness = {
-        name: bounds
-        for name, bounds in liveness.items()
-        if name not in graph.inputs
-    }
+    arena_liveness = {name: bounds for name, bounds in liveness.items() if name not in graph.inputs}
     return allocate_arena(
         arena_tensors,
         arena_liveness,
