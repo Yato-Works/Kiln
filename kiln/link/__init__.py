@@ -10,7 +10,8 @@ from .harness import (
     render_harness,
     to_input_domain,
 )
-from .report import budget_violations, format_link_report
+from .report import budget_violations, format_execution_certificate, format_link_report
+from .runner import RunnerConfig, RunnerError, RuntimeMetrics, parse_runtime_metrics
 from .toolchain import (
     MALLOC_SYMBOLS,
     STRICT_FLAGS,
@@ -31,6 +32,11 @@ __all__ = (
     "budget_violations",
     "detect_toolchain",
     "format_link_report",
+    "format_execution_certificate",
+    "RunnerConfig",
+    "RunnerError",
+    "RuntimeMetrics",
+    "parse_runtime_metrics",
     "harness_vectors",
     "inspect_sections",
     "link_spec",

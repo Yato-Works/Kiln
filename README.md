@@ -69,6 +69,8 @@ strong as its tests.
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
 [KIR.md](KIR.md) is the frozen intermediate-representation contract.
+[TARGET_VALIDATION.md](TARGET_VALIDATION.md) defines the difference between host,
+QEMU, and hardware evidence and the reproducible hardware-runner contract.
 The project direction and release acceptance criteria are defined in
 [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 
@@ -116,6 +118,7 @@ python -m kiln build examples/hazard/kiln.yaml            # kiln.yaml -> model.c
 python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front (hazard only)
 python -m kiln link examples/hazard/kiln.yaml --run       # strict compile + link + image measurement + replay
 python -m kiln link examples/hazard/kiln.yaml --target cortex-m3-qemu --run  # freestanding Cortex-M3/QEMU replay
+python -m kiln link examples/hazard/kiln.yaml --target cortex-m4 --runner-config examples/hardware/runner.example.json --run  # board runner
 ```
 
 `kiln build` resolves `model.entry_point`, audits the resolved graph against the

@@ -317,6 +317,9 @@ def test_cli_link_prints_and_writes_the_report(
     report = (out_dir / "link_report.txt").read_text(encoding="utf-8")
     assert report.splitlines()[1].strip() == "Kiln Link Report: hazard-sniffer"
     assert report.endswith("=" * 73 + "\n")
+    evidence = (out_dir / "execution_certificate.txt").read_text(encoding="utf-8")
+    assert "Execution mode" in evidence
+    assert "Measured cycles       : not emitted" in evidence
 
 
 @requires_compiler
@@ -329,6 +332,20 @@ def test_cli_link_without_a_compiler_errors(
     captured = capsys.readouterr()
     assert "[ERROR] Link failed" in captured.err
     assert "C compiler not found: kiln-no-such-cc" in captured.err
+
+
+def test_cli_rejects_runner_config_without_run(capsys: pytest.CaptureFixture[str]) -> None:
+    ret = main(
+        [
+            "link",
+            str(HAZARD_SPEC),
+            "--runner-config",
+            "examples/hardware/runner.example.json",
+        ]
+    )
+
+    assert ret == 1
+    assert "--runner-config requires --run" in capsys.readouterr().err
 
 
 @requires_compiler

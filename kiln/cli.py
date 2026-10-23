@@ -16,7 +16,13 @@ from .budget.report import audit_graph, format_budget_certificate
 from .ir.kir import DType
 from .ir.serialization import dumps_bundle, loads_bundle
 from .ref.ref import run_ref
-from .link import ToolchainError, budget_violations, format_link_report, link_spec
+from .link import (
+    ToolchainError,
+    budget_violations,
+    format_execution_certificate,
+    format_link_report,
+    link_spec,
+)
 from .search import SearchRow, run_search
 from .search.report import format_search_report, search_results_csv
 from .spec import load_spec, resolve_model_graph
@@ -478,6 +484,8 @@ def cmd_search(args: argparse.Namespace) -> int:
 def cmd_link(args: argparse.Namespace) -> int:
     """Phase 4: compile + link the spec's C artifacts, measure the image, replay it."""
     try:
+        if args.runner_config and not args.run:
+            raise ToolchainError("--runner-config requires --run")
         task = load_spec(args.spec)
         runtime_header = args.runtime_header
         if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
@@ -491,6 +499,7 @@ def cmd_link(args: argparse.Namespace) -> int:
             alignment=args.alignment,
             runtime_header=runtime_header,
             run=args.run,
+            runner_config=Path(args.runner_config) if args.runner_config else None,
         )
     except ToolchainError as e:
         print(_color(f"[ERROR] Link failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
@@ -508,6 +517,9 @@ def cmd_link(args: argparse.Namespace) -> int:
 
     report_text = format_link_report(outcome, task)
     (outcome.out_dir / "link_report.txt").write_text(report_text + "\n", encoding="utf-8")
+    (outcome.out_dir / "execution_certificate.txt").write_text(
+        format_execution_certificate(outcome) + "\n", encoding="utf-8"
+    )
     print(report_text)
     print(
         _color("[LINKED]", Style.BOLD + Style.GREEN)
@@ -974,6 +986,11 @@ def create_parser() -> argparse.ArgumentParser:
     )
     p_link.add_argument(
         "--run", action="store_true", help="Execute the linked binary on the generated vectors"
+    )
+    p_link.add_argument(
+        "--runner-config",
+        default=None,
+        help="JSON flash/run command configuration for a physical hardware target",
     )
 
     # audit

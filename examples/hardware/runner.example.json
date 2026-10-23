@@ -1,0 +1,6 @@
+{
+  "name": "replace-me",
+  "flash": ["your-flash-tool", "{exe}"],
+  "run": ["your-run-and-capture-tool", "{exe}"],
+  "timeout_seconds": 30
+}

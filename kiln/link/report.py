@@ -86,6 +86,7 @@ def format_link_report(outcome: LinkOutcome, spec: KilnSpec) -> str:
         _RULE,
         f"  Toolchain            : {outcome.toolchain}",
         f"  Target profile       : {outcome.target_profile} ({outcome.execution_mode})",
+        f"  Execution evidence   : {outcome.execution_evidence}",
         f"  Translation units    : {', '.join(path.name for path in outcome.sources)}",
         f"  Linked executable    : {outcome.executable}",
         _THIN,
@@ -113,3 +114,36 @@ def format_link_report(outcome: LinkOutcome, spec: KilnSpec) -> str:
         _RULE,
     ]
     return "\n".join(lines)
+
+
+def format_execution_certificate(outcome: LinkOutcome) -> str:
+    """Formats the separately auditable runtime evidence for a link."""
+    metrics = outcome.runtime_metrics
+    metric_lines = [
+        f" *   Measured cycles       : {metrics.cycles if metrics.cycles is not None else 'not emitted'}",
+        f" *   Measured peak RAM     : {metrics.peak_ram_bytes if metrics.peak_ram_bytes is not None else 'not emitted'}",
+        f" *   Measured flash bytes  : {metrics.flash_bytes if metrics.flash_bytes is not None else 'not emitted'}",
+        f" *   Measured stack bytes  : {metrics.stack_bytes if metrics.stack_bytes is not None else 'not emitted'}",
+    ]
+    return "\n".join(
+        [
+            "/*",
+            " * =========================================================================",
+            " *                   Kiln Runtime Evidence Certificate",
+            " * =========================================================================",
+            f" *   Target profile        : {outcome.target_profile}",
+            f" *   Execution mode        : {outcome.execution_mode}",
+            f" *   Evidence              : {outcome.execution_evidence}",
+            f" *   Harness predictions   : {len(outcome.predictions)} vectors replayed",
+            f" *   Static estimated cycles: {outcome.report.estimated_worst_cycles}",
+            f" *   Static .text bytes    : {outcome.text_bytes if outcome.text_bytes is not None else 'unavailable'}",
+            f" *   Static .rodata bytes  : {outcome.rodata_bytes if outcome.rodata_bytes is not None else 'unavailable'}",
+            f" *   Static .bss bytes     : {outcome.bss_bytes if outcome.bss_bytes is not None else 'unavailable'}",
+            *metric_lines,
+            " * -------------------------------------------------------------------------",
+            " *   Measured values are observations from the configured runner;",
+            " *   absent values are intentionally not inferred from static estimates.",
+            " * =========================================================================",
+            " */",
+        ]
+    )

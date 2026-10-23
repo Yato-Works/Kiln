@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
+from .runner import RunnerConfig, RunnerError, load_runner_config, run_runner_config
+
 __all__ = (
     "MALLOC_SYMBOLS",
     "STRICT_FLAGS",
@@ -252,8 +254,24 @@ def link_executable(
     _run(argv, what="linking")
 
 
-def run_executable(toolchain: Toolchain, exe: Path) -> str:
+def run_executable(
+    toolchain: Toolchain,
+    exe: Path,
+    *,
+    runner_config: Path | RunnerConfig | None = None,
+) -> str:
     """Runs a linked artifact when the profile has a truthful execution runner."""
+    if runner_config is not None:
+        try:
+            config = (
+                load_runner_config(runner_config)
+                if isinstance(runner_config, Path)
+                else runner_config
+            )
+            return run_runner_config(config, exe)
+        except RunnerError as exc:
+            raise ToolchainError(str(exc)) from exc
+
     runner = toolchain.profile.runner
     if toolchain.profile.execution != "native" and runner is None:
         raise ToolchainError(

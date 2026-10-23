@@ -33,6 +33,7 @@ from . import harness as harness_module
 from .toolchain import (
     MALLOC_SYMBOLS,
     Toolchain,
+    ToolchainError,
     compile_object,
     detect_toolchain,
     inspect_sections,
@@ -41,6 +42,13 @@ from .toolchain import (
     undefined_symbols,
 )
 from .target_runtime import CORTEX_M_LINKER_SCRIPT, CORTEX_M_SEMIHOST_ASM, CORTEX_M_STARTUP_C
+from .runner import (
+    RunnerConfig,
+    RunnerError,
+    RuntimeMetrics,
+    load_runner_config,
+    parse_runtime_metrics,
+)
 
 __all__ = ("LinkOutcome", "link_spec")
 
@@ -63,6 +71,8 @@ class LinkOutcome:
     toolchain: str
     target_profile: str = "host"
     execution_mode: str = "native"
+    execution_evidence: str = "not-run"
+    runtime_metrics: RuntimeMetrics = RuntimeMetrics()
     symbols_inspected: bool = True
 
     @property
@@ -121,6 +131,7 @@ def link_spec(
     alignment: int = 4,
     runtime_header: str | None = None,
     run: bool = False,
+    runner_config: Path | None = None,
 ) -> LinkOutcome:
     """Compiles, links and (optionally) executes one declarative spec.
 
@@ -171,9 +182,22 @@ def link_spec(
     sections = inspect_sections(toolchain, executable)
     model_undefined = undefined_symbols(toolchain, objects[0])
     predictions: tuple[int, ...] = ()
+    execution_evidence = "not-run"
+    runtime_metrics = RuntimeMetrics()
     if run:
-        stdout = run_executable(toolchain, executable)
+        hardware_config: RunnerConfig | None = None
+        if runner_config is not None:
+            try:
+                hardware_config = load_runner_config(runner_config)
+            except RunnerError as exc:
+                raise ToolchainError(str(exc)) from exc
+        stdout = run_executable(toolchain, executable, runner_config=hardware_config)
         predictions = harness_module.parse_predictions(stdout, expected=len(vectors))
+        runtime_metrics = parse_runtime_metrics(stdout)
+        if hardware_config is not None:
+            execution_evidence = f"hardware-runner:{hardware_config.name}"
+        else:
+            execution_evidence = toolchain.profile.execution
 
     return LinkOutcome(
         spec_name=spec.name,
@@ -190,5 +214,7 @@ def link_spec(
         toolchain=toolchain.cc,
         target_profile=toolchain.profile.name,
         execution_mode=toolchain.profile.execution,
+        execution_evidence=execution_evidence,
+        runtime_metrics=runtime_metrics,
         symbols_inspected=model_undefined is not None,
     )
