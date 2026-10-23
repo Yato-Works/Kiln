@@ -15,9 +15,9 @@ release acceptance criteria live in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 | **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
 | **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | DONE (M2.5 open) |
 | **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml` + `kiln build` (予算ゲート)、コンパイル時アーキテクチャ探索 `kiln search` (RAM/ROM/容量パレート) 完了; 自動タスク振り分けは未着手 | IN PROGRESS |
-| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` の厳格コンパイル + リンク + イメージ計測、区間境界伝播 M4.2 (`kiln audit --intervals` / 証明書の Accumulator Safety 行) 完了; 真実性のあるリプレイ、残存能力監査 (Linear Probing)、実機ファーム検証は未着手 | IN PROGRESS |
+| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` の厳格コンパイル + リンク + イメージ計測、区間境界伝播 M4.2 (`kiln audit --intervals` / 証明書の Accumulator Safety 行)、Cortex-M3/QEMU system-emulator replay 完了; 残存能力監査 (Linear Probing)、実機ファーム検証は未着手 | IN PROGRESS |
 | **5** | **ムーンショット (Moonshots)** | 核を汚さない実験ブランチでの賭け | 論理ゲート網バックエンド、CBMC/Frama-C 形式検証、決定木/DNF 抽出、オンデバイス整数SGD | EXPERIMENTAL |
-| **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | 真実性のある system-emulator / 実機クロス検証、仕様書先出し、再現可能ビルド、3コマンドのHello World | FUTURE |
+| **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | 実機クロス検証、仕様書先出し、再現可能ビルド、3コマンドのHello World | FUTURE |
 
 ---
 
@@ -550,13 +550,15 @@ lowering path in `examples/kws/kws_graph.py`.
 
 ---
 
-## Phase 4 Progress (2026-09-27)
+## Phase 4 Progress (2026-10-24)
 
 **Status**: M4.1 (`kiln link`) is done -- the emitted C is compiled, linked,
 measured and replayed, and the zero-malloc claim is now an *observation*.  M4.2
 (interval boundary propagation) is done -- the certificate now carries a static
-proof of int32 accumulator safety.  The linear-probing capability audit and
-on-device firmware verification remain open.
+proof of int32 accumulator safety. M4.3 (truthful Cortex-M3 system-emulator
+replay) now boots a freestanding image in QEMU with an explicit vector table,
+linker memory map and semihosting output; the linear-probing capability audit
+and on-device firmware verification remain open.
 
 ### 1. M4.1 `kiln link`: from certificate to measured image
 
@@ -610,7 +612,7 @@ command line in the error.  A declared frontend file that is missing from the tr
 is skipped (with `kiln build` warning about it), because the model can still be
 linked and measured on its own.
 
-`tests/test_link.py` adds 22 tests: the harness/prediction contract, the uint8 vs
+`tests/test_link.py` adds 29 tests: the harness/prediction contract, the uint8 vs
 int8 input domains, toolchain discovery (`--cc`, `$KILN_CC`, PATH) and its error
 paths, the strict-flag gate, a missing frontend, a compile error surfacing the
 compiler's diagnosis, the budget gate on `kiln link`, the M4.2 accumulator gate

@@ -40,6 +40,7 @@ from .toolchain import (
     run_executable,
     undefined_symbols,
 )
+from .target_runtime import CORTEX_M_LINKER_SCRIPT, CORTEX_M_SEMIHOST_ASM, CORTEX_M_STARTUP_C
 
 __all__ = ("LinkOutcome", "link_spec")
 
@@ -132,16 +133,31 @@ def link_spec(
         spec, loaded, target, alignment=alignment, runtime_header=runtime_header
     )
 
+    toolchain: Toolchain = detect_toolchain(cc, target=target_profile)
     input_desc = loaded.graph.tensors[loaded.graph.inputs[0]]
     vectors = harness_module.harness_vectors(input_desc.num_elements)
     harness_source = harness_module.harness_source_path(target)
     harness_source.write_text(
-        harness_module.render_harness(input_desc.num_elements, vectors), encoding="utf-8"
+        harness_module.render_harness(
+            input_desc.num_elements,
+            vectors,
+            output=toolchain.profile.harness_output,
+        ),
+        encoding="utf-8",
     )
 
-    toolchain: Toolchain = detect_toolchain(cc, target=target_profile)
     include_dirs = (target, spec.base_dir)
-    sources = (emitted.model_c, *emitted.frontend_sources, harness_source)
+    support_sources: tuple[Path, ...] = ()
+    linker_script: Path | None = None
+    if toolchain.profile.startup == "cortex-m":
+        startup_source = target / "kiln_startup.c"
+        semihost_source = target / "kiln_semihost.s"
+        linker_script = target / "kiln_memory.ld"
+        startup_source.write_text(CORTEX_M_STARTUP_C, encoding="utf-8")
+        semihost_source.write_text(CORTEX_M_SEMIHOST_ASM, encoding="utf-8")
+        linker_script.write_text(CORTEX_M_LINKER_SCRIPT, encoding="utf-8")
+        support_sources = (startup_source, semihost_source)
+    sources = (emitted.model_c, *emitted.frontend_sources, *support_sources, harness_source)
 
     objects: list[Path] = []
     for index, source in enumerate(sources):
@@ -150,7 +166,7 @@ def link_spec(
         objects.append(obj)
 
     executable = _executable_path(target, spec.name)
-    link_executable(toolchain, objects, executable)
+    link_executable(toolchain, objects, executable, linker_script=linker_script)
 
     sections = inspect_sections(toolchain, executable)
     model_undefined = undefined_symbols(toolchain, objects[0])

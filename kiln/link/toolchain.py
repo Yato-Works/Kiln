@@ -66,8 +66,11 @@ class TargetProfile:
     arch_flags: tuple[str, ...] = ()
     link_flags: tuple[str, ...] = ()
     runner: str | None = None
+    runner_args: tuple[str, ...] = ()
     default_cc: str = "gcc"
     execution: str = "native"
+    startup: str | None = None
+    harness_output: str = "stdio"
 
 
 TARGET_PROFILES: Mapping[str, TargetProfile] = {
@@ -92,6 +95,37 @@ TARGET_PROFILES: Mapping[str, TargetProfile] = {
         link_flags=("-march=rv32imc", "-mabi=ilp32"),
         default_cc="riscv64-unknown-elf-gcc",
         execution="bare-metal-compile-only",
+    ),
+    "cortex-m3-qemu": TargetProfile(
+        name="cortex-m3-qemu",
+        arch_flags=("-mcpu=cortex-m3", "-mthumb"),
+        link_flags=(
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-nostdlib",
+            "-nostartfiles",
+            "-lgcc",
+        ),
+        runner="qemu-system-arm",
+        runner_args=(
+            "-M",
+            "mps2-an385",
+            "-cpu",
+            "cortex-m3",
+            "-nographic",
+            "-monitor",
+            "none",
+            "-serial",
+            "none",
+            "-semihosting-config",
+            "enable=on,target=native",
+            "-kernel",
+            "{exe}",
+        ),
+        default_cc="arm-none-eabi-gcc",
+        execution="qemu-system-arm",
+        startup="cortex-m",
+        harness_output="semihosting",
     ),
 }
 
@@ -188,21 +222,33 @@ def compile_object(
     include_dirs: Sequence[Path] = (),
 ) -> None:
     """Compiles one translation unit with the strict flags and target architecture flags."""
-    argv = [toolchain.cc, *STRICT_FLAGS, *toolchain.profile.arch_flags]
+    flags = STRICT_FLAGS
+    if source.suffix.lower() in {".s", ".asm"}:
+        # The semihosting gate is deliberately a tiny assembler translation unit;
+        # C dialect and C diagnostic flags do not apply to it.
+        flags = tuple(flag for flag in STRICT_FLAGS if flag not in {"-std=c99", "-pedantic"})
+    argv = [toolchain.cc, *flags, *toolchain.profile.arch_flags]
     argv += [f"-I{directory}" for directory in include_dirs]
     argv += ["-c", str(source), "-o", str(obj)]
     _run(argv, what=f"compiling {source.name}")
 
 
-def link_executable(toolchain: Toolchain, objects: Sequence[Path], exe: Path) -> None:
+def link_executable(
+    toolchain: Toolchain,
+    objects: Sequence[Path],
+    exe: Path,
+    *,
+    linker_script: Path | None = None,
+) -> None:
     """Links the compiled objects into an executable using target link flags."""
     argv = [
         toolchain.cc,
         *toolchain.profile.link_flags,
-        *[str(obj) for obj in objects],
-        "-o",
-        str(exe),
     ]
+    if linker_script is not None:
+        argv.append(f"-Wl,-T,{linker_script}")
+    argv.extend(str(obj) for obj in objects)
+    argv.extend(("-o", str(exe)))
     _run(argv, what="linking")
 
 
@@ -220,7 +266,10 @@ def run_executable(toolchain: Toolchain, exe: Path) -> str:
             raise ToolchainError(
                 f"runner '{runner}' required for target '{toolchain.profile.name}' not found on PATH"
             )
-        return _run([resolved_runner, str(exe)], what=f"running {exe.name} via {runner}")
+        args = [argument.replace("{exe}", str(exe)) for argument in toolchain.profile.runner_args]
+        if "{exe}" not in " ".join(toolchain.profile.runner_args):
+            args.append(str(exe))
+        return _run([resolved_runner, *args], what=f"running {exe.name} via {runner}")
     return _run([str(exe)], what=f"running {exe.name}")
 
 

@@ -961,7 +961,7 @@ def create_parser() -> argparse.ArgumentParser:
     p_link.add_argument(
         "--target",
         default="host",
-        choices=["host", "cortex-m0plus", "cortex-m4", "riscv32"],
+        choices=sorted(TARGET_PROFILES),
         help="Target architectural profile for host or cross compilation (default: host)",
     )
     p_link.add_argument(

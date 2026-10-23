@@ -51,12 +51,17 @@ jobs:
       - name: Install ARM Embedded Toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi qemu-system-arm
 
       - name: Phase 4 Cortex-M cross-compile & image inspection
         # Bare-metal target profiles are compile/image-inspection only until a
         # truthful system-emulator or hardware runner is configured.
         run: python -m kiln link examples/hazard/kiln.yaml --target cortex-m0plus
+
+      - name: Phase 4 Cortex-M system-emulator replay
+        # This boots a freestanding Cortex-M3 image in QEMU system emulation;
+        # qemu-user is intentionally not used for a bare-metal artifact.
+        run: python -m kiln link examples/hazard/kiln.yaml --target cortex-m3-qemu --run
 
       - name: Test suite
         # The 107 MB Speech Commands archive is not vendored, so the tests that

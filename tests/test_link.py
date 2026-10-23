@@ -14,6 +14,8 @@ unavailable instead of guessing.
 from __future__ import annotations
 
 import shutil
+import subprocess
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,7 @@ from kiln.link import (
 from kiln.ref.ref import run_ref
 from kiln.spec import load_spec, resolve_model_graph
 from kiln.spec.pipeline import SafetyViolationError
+from kiln.link.target_runtime import CORTEX_M_STARTUP_C
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HAZARD_SPEC = REPO_ROOT / "examples" / "hazard" / "kiln.yaml"
@@ -309,6 +312,7 @@ def test_cli_link_prints_and_writes_the_report(
     assert "audited arena +" in captured.out  # the frontend brings its own .bss
     assert "Harness replay (5 vectors)" in captured.out
     assert "zeros=" in captured.out
+    assert "Target profile" in captured.out
 
     report = (out_dir / "link_report.txt").read_text(encoding="utf-8")
     assert report.splitlines()[1].strip() == "Kiln Link Report: hazard-sniffer"
@@ -358,6 +362,83 @@ def test_target_profiles_definition() -> None:
     assert m0.default_cc == "arm-none-eabi-gcc"
     assert m0.execution == "bare-metal-compile-only"
     assert m0.runner is None
+
+    qemu = TARGET_PROFILES["cortex-m3-qemu"]
+    assert qemu.execution == "qemu-system-arm"
+    assert qemu.runner == "qemu-system-arm"
+    assert qemu.startup == "cortex-m"
+    assert qemu.harness_output == "semihosting"
+    assert "{exe}" in qemu.runner_args
+
+
+def test_semihosting_harness_is_freestanding() -> None:
+    source = render_harness(4, output="semihosting")
+
+    assert "#include <stdio.h>" not in source
+    assert "kiln_semihost_call" in source
+    assert "kiln_exit(0)" in source
+
+
+@requires_compiler
+def test_qemu_c_sources_pass_the_strict_c_gate(tmp_path: Path) -> None:
+    toolchain = detect_toolchain()
+    sources = {
+        "startup.c": CORTEX_M_STARTUP_C,
+        "harness.c": render_harness(4, output="semihosting"),
+    }
+
+    for name, source in sources.items():
+        source_path = tmp_path / name
+        object_path = tmp_path / f"{name}.o"
+        source_path.write_text(source, encoding="utf-8")
+        result = subprocess.run(
+            [toolchain.cc, *STRICT_FLAGS, "-c", str(source_path), "-o", str(object_path)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+
+
+def test_qemu_runner_expands_the_firmware_argument(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import kiln.link.toolchain as toolchain_module
+    from kiln.link.toolchain import TARGET_PROFILES, Toolchain, run_executable
+
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **_kwargs):
+        calls.append(list(argv))
+        return SimpleNamespace(returncode=0, stdout="0 1\n", stderr="")
+
+    monkeypatch.setattr(toolchain_module.shutil, "which", lambda _name: "qemu-system-arm")
+    monkeypatch.setattr(toolchain_module.subprocess, "run", fake_run)
+
+    executable = tmp_path / "firmware.elf"
+    output = run_executable(
+        Toolchain(cc="arm-none-eabi-gcc", profile=TARGET_PROFILES["cortex-m3-qemu"]),
+        executable,
+    )
+
+    assert output == "0 1\n"
+    assert calls == [
+        [
+            "qemu-system-arm",
+            "-M",
+            "mps2-an385",
+            "-cpu",
+            "cortex-m3",
+            "-nographic",
+            "-monitor",
+            "none",
+            "-serial",
+            "none",
+            "-semihosting-config",
+            "enable=on,target=native",
+            "-kernel",
+            str(executable),
+        ]
+    ]
 
 
 def test_bare_metal_profiles_refuse_untruthful_replay(tmp_path: Path) -> None:

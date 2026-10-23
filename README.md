@@ -64,7 +64,7 @@ strong as its tests.
 | 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** (raw-PCM path: 24-clip demo; log-mel features off-device) |
 | 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
 | 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (RAM/ROM/MAC Pareto front + int32 safety verification) |
-| 4 | Certified trust: `kiln link` (strict host/Cortex-M compile + link + image measurement) | **IN PROGRESS** (M4.1–M4.2 complete; target profiles for Cortex-M0+/M4/RISC-V; truthful replay is next) |
+| 4 | Certified trust: `kiln link` (strict host/Cortex-M compile + link + image measurement + system-emulator replay) | **IN PROGRESS** (M4.1–M4.2 complete; Cortex-M3/QEMU replay is the current acceptance path; hardware is next) |
 | 5-6 | Moonshots, ecosystem | planned |
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
@@ -115,6 +115,7 @@ A task is a YAML spec, and the budget gate is part of the build:
 python -m kiln build examples/hazard/kiln.yaml            # kiln.yaml -> model.c + budget_certificate.txt
 python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front (hazard only)
 python -m kiln link examples/hazard/kiln.yaml --run       # strict compile + link + image measurement + replay
+python -m kiln link examples/hazard/kiln.yaml --target cortex-m3-qemu --run  # freestanding Cortex-M3/QEMU replay
 ```
 
 `kiln build` resolves `model.entry_point`, audits the resolved graph against the
@@ -278,10 +279,11 @@ reproducing KIR outside the Python frontend.
 Use `kiln validate model.kir.json` in CI as a fail-closed safety gate, or
 `kiln inspect model.kir.json --json` to feed graph and resource information into
 other tooling.
-* Not guaranteed (yet): execution on real silicon or a system emulator. `kiln link`
-  can compile and measure host, ARM Cortex-M0+/M4 and RISC-V target images, but
-  bare-metal profiles intentionally refuse `--run` until a truthful runner is
-  configured. The latency figure remains an upper-bound cycle estimate, and
+* Not guaranteed (yet): execution on real silicon. `kiln link` can compile and
+  measure host, ARM Cortex-M0+/M4 and RISC-V target images; the dedicated
+  `cortex-m3-qemu` profile boots a freestanding image in QEMU system emulation,
+  while bare-metal profiles intentionally refuse `--run` without a truthful
+  runner. The latency figure remains an upper-bound cycle estimate, and
   bit-identical *training* runs are not guaranteed.
 * The PyTorch frontend lowers sequential and residual graphs (including skip connections
   `a + b` via torch.fx) to KIR's `ADD` node with certified int32 accumulator safety.
