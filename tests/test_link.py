@@ -195,7 +195,7 @@ def test_link_toy_spec_builds_and_measures(temp_dir: Path, toy_spec_factory) -> 
     assert outcome.symbols_inspected
     assert outcome.malloc_symbols == frozenset()
     assert outcome.text_bytes is not None and outcome.text_bytes > 0
-    assert outcome.arena_matches is True          # the linked .bss reserves the arena
+    assert outcome.arena_matches is True  # the linked .bss reserves the arena
     assert outcome.rom_covers_weights is True
     assert len(outcome.vectors) == len(outcome.predictions) == 5
     assert all(0 <= label < 3 for label in outcome.predictions)
@@ -210,7 +210,7 @@ def test_link_hazard_binary_is_bit_exact_against_the_reference(temp_dir: Path) -
     outcome = link_spec(spec, out_dir=temp_dir / "hazard", run=True)
 
     assert outcome.predictions == _reference_labels(loaded, outcome.vectors)
-    assert len(set(outcome.predictions)) > 1     # the bag discriminates, it does not collapse
+    assert len(set(outcome.predictions)) > 1  # the bag discriminates, it does not collapse
 
     # The spec's own C frontend is part of the verified image...
     assert [path.name for path in outcome.sources] == [
@@ -307,7 +307,7 @@ def test_cli_link_prints_and_writes_the_report(
     assert "Kiln Link Report: hazard-sniffer" in captured.out
     assert "[LINKED]" in captured.out
     assert "zero-malloc observed" in captured.out
-    assert "audited arena +" in captured.out      # the frontend brings its own .bss
+    assert "audited arena +" in captured.out  # the frontend brings its own .bss
     assert "Harness replay (5 vectors)" in captured.out
     assert "zeros=" in captured.out
 
@@ -346,3 +346,28 @@ def test_cli_link_budget_violation_returns_failure(
     assert (out_dir / "link_report.txt").is_file()
 
 
+def test_target_profiles_definition() -> None:
+    from kiln.link.toolchain import TARGET_PROFILES
+
+    assert "host" in TARGET_PROFILES
+    assert "cortex-m0plus" in TARGET_PROFILES
+    assert "cortex-m4" in TARGET_PROFILES
+    assert "riscv32" in TARGET_PROFILES
+
+    m0 = TARGET_PROFILES["cortex-m0plus"]
+    assert "-mcpu=cortex-m0plus" in m0.arch_flags
+    assert m0.default_cc == "arm-none-eabi-gcc"
+
+
+def test_detect_toolchain_rejects_unknown_target() -> None:
+    with pytest.raises(ToolchainError, match="unknown target 'foo-mcu'"):
+        detect_toolchain(target="foo-mcu")
+
+
+def test_detect_cross_toolchain_missing_reports_clean_error() -> None:
+    # Unless arm-none-eabi-gcc happens to be installed, asking for cortex-m0plus without cc must fail cleanly
+    if shutil.which("arm-none-eabi-gcc") is None:
+        with pytest.raises(
+            ToolchainError, match="target 'cortex-m0plus' compiler 'arm-none-eabi-gcc' not found"
+        ):
+            detect_toolchain(target="cortex-m0plus")

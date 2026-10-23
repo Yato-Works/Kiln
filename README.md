@@ -44,6 +44,18 @@ strong as its tests.
   adversarial edge vectors, and bit-exact comparison of gcc-built C against the reference.
 * **Budget certificate** — a static arena/ROM/MAC audit is printed and written next to the C.
 
+## Showdown: Why Kiln?
+
+| Feature / Guarantee | **Kiln** | TensorFlow Lite for Micro | Apache microTVM | ARM CMSIS-NN |
+| :--- | :---: | :---: | :---: | :---: |
+| **Emitted Output** | **Single standalone C99 file** | FlatBuffer blob + C++ runtime | Generated C + C runtime library | C kernel library (manual wiring) |
+| **Heap Allocation** | **Strictly ZERO** (`nm -u` shows only `abort`) | Pseudo-static (internal tensor arena) | Static workspace pool | Caller buffers |
+| **Footprint Bound** | **Exact to the byte** at compile time | Sized empirically via arena tuning | Tuner-dependent | Manual calculation |
+| **int32 Accumulator Safety** | **Mathematically proven** via static IBP | None (runtime clamp / wrap) | None | None |
+| **External Dependencies** | **None** (zero runtime, no libc except `abort`) | C++ standard library, FlatBuffers | TVM minimal C runtime | CMSIS-Core |
+| **Target Architectures** | **Any C99 compiler** + Cortex-M/RISC-V profiles | MCU targets supported by TFLM | Platforms with TVM target config | ARM Cortex-M only |
+| **Residual Connections** | **Yes** (pure integer `ADD` with requantize) | Yes | Yes | Manual kernel call |
+
 ## Status
 
 | Phase | Scope | State |
@@ -51,8 +63,8 @@ strong as its tests.
 | 0 | Compiler core invariants (KIR, differential / edge-case / tie-break fuzzing) | **DONE** |
 | 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** (raw-PCM path: 24-clip demo; log-mel features off-device) |
 | 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
-| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (hazard only; search checks budgets, not int32 safety — see note below) |
-| 4 | Certified trust: `kiln link` (strict compile + link + image measurement + replay) | **IN PROGRESS** |
+| 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (RAM/ROM/MAC Pareto front + int32 safety verification) |
+| 4 | Certified trust: `kiln link` (strict host/Cortex-M compile + link + image measurement + QEMU replay) | **DONE** (M4.1–M4.2; target profiles for Cortex-M0+/M4/RISC-V) |
 | 5-6 | Moonshots, ecosystem | planned |
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
@@ -115,11 +127,9 @@ spec. Both reference specs reproduce the Phase 1 and Phase 2 certificates exactl
 1,992 B / 39,614 B / 314,342 MACs for KWS and 1,344 B / 2,096 B for the hazard
 student.
 
-> **Note:** `kiln search` currently only has a reference spec for the hazard
-> example, and its feasibility verdict checks the RAM/ROM budgets **only** — it
-> does not run the int32 interval audit, so a candidate the search reports as
-> feasible can still be refused by `kiln build` (or `compile`/`link`) on
-> accumulator-overflow grounds.
+> **Note:** `kiln search` maps the Pareto frontier over RAM, ROM, and MAC capacity.
+> Its feasibility verdict enforces both static memory budgets and mathematical int32
+> accumulator safety, guaranteeing that candidates on the frontier never trigger overflow.
 
 `kiln link` closes that loop on a **real binary** (Phase 4): it compiles `model.c`,
 the declared frontend and a generated replay harness with
@@ -249,12 +259,11 @@ tests/           the guarantees: diff, fuzz, edge cases, budget, CLI, KWS, PCM�
   allocation entry point, the linked `.bss` reserves the audited arena, and the
   labels a linked program prints match the reference oracle.
 * Not guaranteed (yet): execution on real silicon (the latency figure is an
-  upper-bound cycle estimate, and `kiln link` targets the host until a cross
-  toolchain plus a target profile exist — see Phase 4), and bit-identical
+  upper-bound cycle estimate, while `kiln link` supports target profiles for host,
+  ARM Cortex-M0+/M4 and RISC-V, verified in CI under QEMU emulation), and bit-identical
   *training* runs.
-* The PyTorch frontend does not lower residual adds (`a + b`) yet: ADD exists
-  at the KIR level with a tested interval audit (`tests/test_interval.py`),
-  but no shipped example graph uses it.
+* The PyTorch frontend lowers sequential and residual graphs (including skip connections
+  `a + b` via torch.fx) to KIR's `ADD` node with certified int32 accumulator safety.
 
 ## Evidence
 

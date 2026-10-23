@@ -78,8 +78,12 @@ def format_search_report(spec: KilnSpec, outcome: SearchOutcome) -> str:
         "",
         "## Candidates",
         "",
-        "| # | " + " | ".join(names) + " | Arena RAM (B) | ROM (B) | MACs | Cycles | MACs/B | Verdict |",
-        "| ---: | " + " | ".join("---:" for _ in names) + " | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| # | "
+        + " | ".join(names)
+        + " | Arena RAM (B) | ROM (B) | MACs | Cycles | MACs/B | Verdict |",
+        "| ---: | "
+        + " | ".join("---:" for _ in names)
+        + " | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for index, row in enumerate(outcome.rows):
         cells = [str(row.params[name]) for name in names]
@@ -93,7 +97,9 @@ def format_search_report(spec: KilnSpec, outcome: SearchOutcome) -> str:
                 f"{row.estimated_worst_cycles:,}",
                 f"{row.capacity_per_arena_byte:.2f}",
             ]
-        lines.append(f"| {index} | " + " | ".join(cells) + f" | {_escaped(_verdict(outcome, index, row))} |")
+        lines.append(
+            f"| {index} | " + " | ".join(cells) + f" | {_escaped(_verdict(outcome, index, row))} |"
+        )
 
     lines += [
         "",
@@ -136,8 +142,11 @@ def format_search_report(spec: KilnSpec, outcome: SearchOutcome) -> str:
 
     lines += [
         "",
-        "Objectives: " + ", ".join(f"minimise `{key}`" for key in MINIMISE) + ", "
-        + ", ".join(f"maximise `{key}`" for key in MAXIMISE) + ".",
+        "Objectives: "
+        + ", ".join(f"minimise `{key}`" for key in MINIMISE)
+        + ", "
+        + ", ".join(f"maximise `{key}`" for key in MAXIMISE)
+        + ".",
         "",
     ]
     return "\n".join(lines)
@@ -147,27 +156,31 @@ def search_results_csv(outcome: SearchOutcome, names: list[str]) -> str:
     """Renders the raw rows as CSV (one line per candidate, audit columns exact)."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerow([
-        *names,
-        "arena_ram_bytes",
-        "total_rom_bytes",
-        "total_macs",
-        "estimated_worst_cycles",
-        "capacity_per_arena_byte",
-        "feasible",
-        "pareto",
-        "error",
-    ])
+    writer.writerow(
+        [
+            *names,
+            "arena_ram_bytes",
+            "total_rom_bytes",
+            "total_macs",
+            "estimated_worst_cycles",
+            "capacity_per_arena_byte",
+            "feasible",
+            "pareto",
+            "error",
+        ]
+    )
     for index, row in enumerate(outcome.rows):
-        writer.writerow([
-            *(row.params[name] for name in names),
-            row.arena_ram_bytes,
-            row.total_rom_bytes,
-            row.total_macs,
-            row.estimated_worst_cycles,
-            f"{row.capacity_per_arena_byte:.4f}",
-            int(row.feasible),
-            int(index in outcome.pareto),
-            row.error or "",
-        ])
+        writer.writerow(
+            [
+                *(row.params[name] for name in names),
+                row.arena_ram_bytes,
+                row.total_rom_bytes,
+                row.total_macs,
+                row.estimated_worst_cycles,
+                f"{row.capacity_per_arena_byte:.4f}",
+                int(row.feasible),
+                int(index in outcome.pareto),
+                row.error or "",
+            ]
+        )
     return buffer.getvalue()

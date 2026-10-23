@@ -47,6 +47,7 @@ __all__ = ("LinkOutcome", "link_spec")
 @dataclass(frozen=True, slots=True)
 class LinkOutcome:
     """Everything one ``kiln link`` run measured about a spec build."""
+
     spec_name: str
     out_dir: Path
     executable: Path
@@ -113,6 +114,7 @@ def link_spec(
     *,
     out_dir: Path | None = None,
     cc: str | None = None,
+    target_profile: str = "host",
     alignment: int = 4,
     runtime_header: str | None = None,
     run: bool = False,
@@ -135,7 +137,7 @@ def link_spec(
         harness_module.render_harness(input_desc.num_elements, vectors), encoding="utf-8"
     )
 
-    toolchain: Toolchain = detect_toolchain(cc)
+    toolchain: Toolchain = detect_toolchain(cc, target=target_profile)
     include_dirs = (target, spec.base_dir)
     sources = (emitted.model_c, *emitted.frontend_sources, harness_source)
 

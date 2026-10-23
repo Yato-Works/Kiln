@@ -23,11 +23,13 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 __all__ = (
     "MALLOC_SYMBOLS",
     "STRICT_FLAGS",
+    "TARGET_PROFILES",
+    "TargetProfile",
     "Toolchain",
     "ToolchainError",
     "detect_toolchain",
@@ -55,9 +57,48 @@ class ToolchainError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class TargetProfile:
+    """Target architectural profile for host or cross compilation."""
+
+    name: str
+    arch_flags: tuple[str, ...] = ()
+    link_flags: tuple[str, ...] = ()
+    runner: str | None = None
+    default_cc: str = "gcc"
+
+
+TARGET_PROFILES: Mapping[str, TargetProfile] = {
+    "host": TargetProfile(name="host", default_cc="gcc"),
+    "cortex-m0plus": TargetProfile(
+        name="cortex-m0plus",
+        arch_flags=("-mcpu=cortex-m0plus", "-mthumb"),
+        link_flags=("-mcpu=cortex-m0plus", "-mthumb", "--specs=nosys.specs"),
+        runner="qemu-arm",
+        default_cc="arm-none-eabi-gcc",
+    ),
+    "cortex-m4": TargetProfile(
+        name="cortex-m4",
+        arch_flags=("-mcpu=cortex-m4", "-mthumb"),
+        link_flags=("-mcpu=cortex-m4", "-mthumb", "--specs=nosys.specs"),
+        runner="qemu-arm",
+        default_cc="arm-none-eabi-gcc",
+    ),
+    "riscv32": TargetProfile(
+        name="riscv32",
+        arch_flags=("-march=rv32imc", "-mabi=ilp32"),
+        link_flags=("-march=rv32imc", "-mabi=ilp32"),
+        runner="qemu-riscv32",
+        default_cc="riscv64-unknown-elf-gcc",
+    ),
+}
+
+
+@dataclass(frozen=True, slots=True)
 class Toolchain:
     """A discovered C compiler plus the binutils next to it."""
+
     cc: str
+    profile: TargetProfile = TARGET_PROFILES["host"]
     objdump: str | None = None
     nm: str | None = None
 
@@ -75,30 +116,56 @@ def _sibling(tool: str, cc: str) -> str | None:
     return shutil.which(tool)
 
 
-def detect_toolchain(cc: str | None = None) -> Toolchain:
-    """Resolves a C compiler: ``cc`` argument, ``$KILN_CC``, then the PATH."""
+def detect_toolchain(cc: str | None = None, *, target: str = "host") -> Toolchain:
+    """Resolves a C compiler: ``cc`` argument, ``$KILN_CC``, target profile, then PATH."""
+    profile = TARGET_PROFILES.get(target)
+    if profile is None:
+        valid = ", ".join(sorted(TARGET_PROFILES))
+        raise ToolchainError(f"unknown target '{target}'; expected one of: {valid}")
+
     requested = cc or os.environ.get("KILN_CC") or None
     resolved: str | None = None
+
     if requested:
         resolved = shutil.which(requested)
         if resolved is None and Path(requested).is_file():
             resolved = str(Path(requested))
         if resolved is None:
             raise ToolchainError(f"C compiler not found: {requested}")
+    elif target != "host":
+        found = shutil.which(profile.default_cc)
+        if found:
+            resolved = found
+        else:
+            raise ToolchainError(
+                f"target '{target}' compiler '{profile.default_cc}' not found on PATH; "
+                f"pass --cc <path> or install the cross toolchain"
+            )
     else:
         for candidate in _CANDIDATES:
             found = shutil.which(candidate)
             if found:
                 resolved = found
                 break
+
     if resolved is None:
         raise ToolchainError(
             "no C compiler found; pass --cc <path>, set KILN_CC, or install gcc/cc/clang"
         )
+
+    # Resolve target-specific binutils if cross-compiling
+    cc_stem = Path(resolved).stem
+    prefix = ""
+    if "-" in cc_stem:
+        prefix = cc_stem.rsplit("gcc", 1)[0]
+    objdump_name = f"{prefix}objdump" if prefix else "objdump"
+    nm_name = f"{prefix}nm" if prefix else "nm"
+
     return Toolchain(
         cc=resolved,
-        objdump=_sibling("objdump", resolved),
-        nm=_sibling("nm", resolved),
+        profile=profile,
+        objdump=_sibling(objdump_name, resolved),
+        nm=_sibling(nm_name, resolved),
     )
 
 
@@ -117,21 +184,35 @@ def compile_object(
     *,
     include_dirs: Sequence[Path] = (),
 ) -> None:
-    """Compiles one translation unit with the strict flags."""
-    argv = [toolchain.cc, *STRICT_FLAGS]
+    """Compiles one translation unit with the strict flags and target architecture flags."""
+    argv = [toolchain.cc, *STRICT_FLAGS, *toolchain.profile.arch_flags]
     argv += [f"-I{directory}" for directory in include_dirs]
     argv += ["-c", str(source), "-o", str(obj)]
     _run(argv, what=f"compiling {source.name}")
 
 
 def link_executable(toolchain: Toolchain, objects: Sequence[Path], exe: Path) -> None:
-    """Links the compiled objects into a real executable."""
-    argv = [toolchain.cc, *[str(obj) for obj in objects], "-o", str(exe)]
+    """Links the compiled objects into an executable using target link flags."""
+    argv = [
+        toolchain.cc,
+        *toolchain.profile.link_flags,
+        *[str(obj) for obj in objects],
+        "-o",
+        str(exe),
+    ]
     _run(argv, what="linking")
 
 
 def run_executable(toolchain: Toolchain, exe: Path) -> str:
-    """Runs a linked artifact and returns its stdout."""
+    """Runs a linked artifact (directly on host or via target runner e.g. qemu-arm)."""
+    runner = toolchain.profile.runner
+    if runner is not None:
+        resolved_runner = shutil.which(runner)
+        if not resolved_runner:
+            raise ToolchainError(
+                f"runner '{runner}' required for target '{toolchain.profile.name}' not found on PATH"
+            )
+        return _run([resolved_runner, str(exe)], what=f"running {exe.name} via {runner}")
     return _run([str(exe)], what=f"running {exe.name}")
 
 
@@ -174,8 +255,4 @@ def undefined_symbols(toolchain: Toolchain, artifact: Path) -> set[str] | None:
     output = _tool_output(toolchain.objdump, ["-t", str(artifact)])
     if output is None:
         return None
-    return {
-        line.split()[-1]
-        for line in output.splitlines()
-        if "*UND*" in line and line.split()
-    }
+    return {line.split()[-1] for line in output.splitlines() if "*UND*" in line and line.split()}

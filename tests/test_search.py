@@ -215,10 +215,10 @@ def _row(outcome, **params):
 
 def test_pareto_front_hand_computed() -> None:
     points = [
-        {"ram": 10, "rom": 10, "macs": 1},   # dominated by point 2 (same RAM, less ROM)
-        {"ram": 5, "rom": 10, "macs": 3},    # front: least RAM, most capacity
-        {"ram": 10, "rom": 5, "macs": 1},    # front: least ROM
-        {"ram": 12, "rom": 12, "macs": 0},   # dominated by point 2
+        {"ram": 10, "rom": 10, "macs": 1},  # dominated by point 2 (same RAM, less ROM)
+        {"ram": 5, "rom": 10, "macs": 3},  # front: least RAM, most capacity
+        {"ram": 10, "rom": 5, "macs": 1},  # front: least ROM
+        {"ram": 12, "rom": 12, "macs": 0},  # dominated by point 2
     ]
 
     assert pareto_front(points, ("ram", "rom"), ("macs",)) == [1, 2]
@@ -395,7 +395,10 @@ def test_search_report_renders_every_section() -> None:
     # A feasible front row, byte for byte.
     assert "| 8 | 96 | 1,344 | 2,096 | 4,608 | 24,618 | 3.43 | fits (**Pareto**) |" in report
     # An over-budget row names the violation instead of hiding it.
-    assert "| 8 | 192 | 2,688 | 2,096 | 9,216 | 49,194 | 3.43 | over budget: arena 2,688 > 2,048 |" in report
+    assert (
+        "| 8 | 192 | 2,688 | 2,096 | 9,216 | 49,194 | 3.43 | over budget: arena 2,688 > 2,048 |"
+        in report
+    )
     assert (
         "Objectives: minimise `arena_ram_bytes`, minimise `total_rom_bytes`, "
         "maximise `total_macs`." in report
@@ -410,8 +413,16 @@ def test_search_results_csv_is_machine_readable() -> None:
 
     assert len(rows) == 15
     assert list(rows[0]) == [
-        "dim", "tokens", "arena_ram_bytes", "total_rom_bytes", "total_macs",
-        "estimated_worst_cycles", "capacity_per_arena_byte", "feasible", "pareto", "error",
+        "dim",
+        "tokens",
+        "arena_ram_bytes",
+        "total_rom_bytes",
+        "total_macs",
+        "estimated_worst_cycles",
+        "capacity_per_arena_byte",
+        "feasible",
+        "pareto",
+        "error",
     ]
     assert (rows[0]["dim"], rows[0]["tokens"]) == ("4", "64")
     assert rows[0]["arena_ram_bytes"] == "640"
@@ -429,7 +440,9 @@ def test_search_is_deterministic() -> None:
     assert first.rows == second.rows
     assert first.pareto == second.pareto and first.feasible_count == second.feasible_count
     assert format_search_report(spec, first) == format_search_report(spec, second)
-    assert search_results_csv(first, ["dim", "tokens"]) == search_results_csv(second, ["dim", "tokens"])
+    assert search_results_csv(first, ["dim", "tokens"]) == search_results_csv(
+        second, ["dim", "tokens"]
+    )
 
 
 # --------------------------------------------------------- loader overrides
@@ -466,7 +479,9 @@ def test_loader_rejects_overrides_for_an_nn_module(temp_dir: Path) -> None:
 # --------------------------------------------------------------------- the CLI
 
 
-def test_cli_search_on_the_hazard_reference(temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_search_on_the_hazard_reference(
+    temp_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     out_dir = temp_dir / "search"
 
     ret = main(["search", str(HAZARD_SEARCH_SPEC), "-o", str(out_dir)])
@@ -544,3 +559,48 @@ def test_cli_search_reports_a_failing_candidate_as_an_error_row(
     captured = capsys.readouterr()
     assert "ERROR ValueError: window 32 is not supported" in captured.out
     assert "[SEARCH] 1 of 2 candidates fit the budget" in captured.out
+
+
+def test_search_rejects_int32_overflow_candidate(search_project: Path) -> None:
+    """Verifies that an architecture candidate whose int32 accumulator overflows is marked unfeasible."""
+    fixture = search_project / "overflow_fixture.py"
+    fixture.write_text(
+        """
+from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
+from kiln.frontend.pytorch import compute_multiplier_and_shift
+
+def build_overflow(tokens: int = 4, dim: int = 4) -> tuple[Graph, dict]:
+    mult, shift = compute_multiplier_and_shift(0.5)
+    qp = QuantParam(multiplier=mult, shift=shift)
+    tensors = {
+        "tokens": TensorDesc("tokens", shape=(1, dim), dtype=DType.INT8),
+        "y": TensorDesc("y", shape=(1, 1), dtype=DType.INT8, quant=qp),
+        "label": TensorDesc("label", shape=(), dtype=DType.INT8),
+    }
+    nodes = [
+        Node(OpType.MATMUL, "op_mm", inputs=["tokens"], outputs=["y"], attrs={"weight": "w_mm"}),
+        Node(OpType.ARGMAX, "op_argmax", inputs=["y"], outputs=["label"]),
+    ]
+    weights = {"w_mm": [[127] * dim]}
+    return Graph(inputs=["tokens"], outputs=["label"], nodes=nodes, tensors=tensors), weights
+""",
+        encoding="utf-8",
+    )
+
+    spec_data = _spec_dict(
+        budget={"ram_arena_max_bytes": 100_000_000, "rom_total_max_bytes": 100_000_000},
+        model={"entry_point": f"{fixture.name}:build_overflow"},
+        search={
+            "entry_point": f"{fixture.name}:build_overflow",
+            "params": {"dim": [10, 200_000]},  # 200,000 * 127 * 127 overflows int32
+        },
+    )
+    spec_path = _write_spec(search_project, spec_data)
+    spec = load_spec(spec_path)
+    outcome = run_search(spec)
+
+    assert outcome.feasible_count == 1
+    safe_row, overflow_row = outcome.rows
+    assert safe_row.feasible is True
+    assert overflow_row.feasible is False
+    assert any("int32 accumulator overflow" in v for v in overflow_row.violations)

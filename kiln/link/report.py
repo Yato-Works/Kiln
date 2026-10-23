@@ -28,9 +28,7 @@ def budget_violations(outcome: LinkOutcome, spec: KilnSpec) -> tuple[str, ...]:
     ]
     if spec.budget.macs_max is not None:
         checks.append(("MACs", outcome.report.total_macs, spec.budget.macs_max))
-    return tuple(
-        f"{label} {used:,} > {limit:,}" for label, used, limit in checks if used > limit
-    )
+    return tuple(f"{label} {used:,} > {limit:,}" for label, used, limit in checks if used > limit)
 
 
 def _arena_note(outcome: LinkOutcome) -> str:
@@ -76,9 +74,7 @@ def _harness_line(outcome: LinkOutcome) -> str:
     if not outcome.predictions:
         return "not run (pass --run to execute the linked binary)"
     names = VECTOR_NAMES[: len(outcome.predictions)]
-    pairs = ", ".join(
-        f"{name}={label}" for name, label in zip(names, outcome.predictions)
-    )
+    pairs = ", ".join(f"{name}={label}" for name, label in zip(names, outcome.predictions))
     return pairs
 
 

@@ -44,6 +44,7 @@ MAXIMISE: tuple[str, ...] = ("total_macs",)
 @dataclass(frozen=True, slots=True)
 class SearchRow:
     """One audited grid point (or one failed candidate, with ``error`` set)."""
+
     params: Mapping[str, int]
     arena_ram_bytes: int
     total_rom_bytes: int
@@ -73,6 +74,7 @@ class SearchRow:
 @dataclass(frozen=True, slots=True)
 class SearchOutcome:
     """The completed grid: every row, plus which rows sit on the front."""
+
     rows: tuple[SearchRow, ...]
     feasible_count: int
     pareto: frozenset[int]
@@ -86,7 +88,12 @@ class SearchOutcome:
         return tuple(self.rows[index] for index in sorted(self.pareto))
 
 
-def _violations(row: Mapping[str, int], spec: KilnSpec) -> tuple[str, ...]:
+def _violations(
+    row: Mapping[str, int],
+    spec: KilnSpec,
+    *,
+    int32_overflow_free: bool = True,
+) -> tuple[str, ...]:
     budget = spec.budget
     checks = [
         ("arena", row["arena_ram_bytes"], budget.ram_arena_max_bytes),
@@ -94,9 +101,10 @@ def _violations(row: Mapping[str, int], spec: KilnSpec) -> tuple[str, ...]:
     ]
     if budget.macs_max is not None:
         checks.append(("macs", row["total_macs"], budget.macs_max))
-    return tuple(
-        f"{label} {used:,} > {limit:,}" for label, used, limit in checks if used > limit
-    )
+    violations = [f"{label} {used:,} > {limit:,}" for label, used, limit in checks if used > limit]
+    if not int32_overflow_free:
+        violations.append("safety int32 accumulator overflow")
+    return tuple(violations)
 
 
 def run_search(spec: KilnSpec, *, alignment: int = 4) -> SearchOutcome:
@@ -114,15 +122,17 @@ def run_search(spec: KilnSpec, *, alignment: int = 4) -> SearchOutcome:
             )
             report = audit_graph(loaded.graph, loaded.weights, alignment=alignment)
         except Exception as exc:  # one illegal candidate must not kill the grid
-            rows.append(SearchRow(
-                params=params,
-                arena_ram_bytes=0,
-                total_rom_bytes=0,
-                total_macs=0,
-                estimated_worst_cycles=0,
-                feasible=False,
-                error=f"{type(exc).__name__}: {exc}",
-            ))
+            rows.append(
+                SearchRow(
+                    params=params,
+                    arena_ram_bytes=0,
+                    total_rom_bytes=0,
+                    total_macs=0,
+                    estimated_worst_cycles=0,
+                    feasible=False,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            )
             continue
 
         measured = {
@@ -130,16 +140,22 @@ def run_search(spec: KilnSpec, *, alignment: int = 4) -> SearchOutcome:
             "total_rom_bytes": report.total_rom_bytes,
             "total_macs": report.total_macs,
         }
-        violations = _violations(measured, spec)
-        rows.append(SearchRow(
-            params=params,
-            arena_ram_bytes=report.arena_ram_bytes,
-            total_rom_bytes=report.total_rom_bytes,
-            total_macs=report.total_macs,
-            estimated_worst_cycles=report.estimated_worst_cycles,
-            feasible=not violations,
-            violations=violations,
-        ))
+        violations = _violations(
+            measured,
+            spec,
+            int32_overflow_free=report.int32_overflow_free,
+        )
+        rows.append(
+            SearchRow(
+                params=params,
+                arena_ram_bytes=report.arena_ram_bytes,
+                total_rom_bytes=report.total_rom_bytes,
+                total_macs=report.total_macs,
+                estimated_worst_cycles=report.estimated_worst_cycles,
+                feasible=not violations,
+                violations=violations,
+            )
+        )
 
     feasible = [index for index, row in enumerate(rows) if row.feasible]
     front = pareto_front([rows[index].objectives() for index in feasible], MINIMISE, MAXIMISE)
