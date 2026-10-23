@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import shutil
 import subprocess
@@ -42,7 +42,9 @@ class GeluMlp(nn.Sequential):
 
 def _compile_and_predict(c_code: str, test_inputs: list[list[int]]) -> list[int]:
     input_len = len(test_inputs[0])
-    harness = c_code + f"""
+    harness = (
+        c_code
+        + f"""
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -58,12 +60,26 @@ int main(int argc, char **argv) {{
     return 0;
 }}
 """
+    )
     with tempfile.TemporaryDirectory() as tmpdir:
         src_path = Path(tmpdir) / "model.c"
         exe_path = Path(tmpdir) / "model.exe"
         src_path.write_text(harness, encoding="utf-8")
 
-        subprocess.run(["gcc", "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic", str(src_path), "-o", str(exe_path)], check=True)
+        subprocess.run(
+            [
+                "gcc",
+                "-O3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                str(src_path),
+                "-o",
+                str(exe_path),
+            ],
+            check=True,
+        )
 
         results = []
         for inp in test_inputs:
@@ -113,7 +129,9 @@ def test_pytorch_conv_e2e_diff():
     ]
 
     c_predictions = _compile_and_predict(c_code, test_samples)
-    ref_predictions = [run_ref(graph, {"graph_in": sample}, weights)["graph_out"][0] for sample in test_samples]
+    ref_predictions = [
+        run_ref(graph, {"graph_in": sample}, weights)["graph_out"][0] for sample in test_samples
+    ]
 
     assert c_predictions == ref_predictions
 
@@ -135,9 +153,12 @@ def test_pytorch_gelu_mlp_e2e_diff():
     ]
 
     c_predictions = _compile_and_predict(c_code, test_samples)
-    ref_predictions = [run_ref(graph, {"graph_in": sample}, weights)["graph_out"][0] for sample in test_samples]
+    ref_predictions = [
+        run_ref(graph, {"graph_in": sample}, weights)["graph_out"][0] for sample in test_samples
+    ]
 
     assert c_predictions == ref_predictions
+
 
 def test_compute_multiplier_and_shift_rejects_invalid_scales():
     # 1. Non-finite values
@@ -192,7 +213,9 @@ def test_pytorch_float_vs_quantized_numerical_accuracy():
             torch_pred = torch.argmax(out_float.flatten()).item()
 
         kiln_pred = run_ref(graph, {"graph_in": sample}, weights)["graph_out"][0]
-        assert torch_pred == kiln_pred, f"Float vs Quantized divergence: Float={torch_pred}, Kiln={kiln_pred}"
+        assert torch_pred == kiln_pred, (
+            f"Float vs Quantized divergence: Float={torch_pred}, Kiln={kiln_pred}"
+        )
 
 
 def test_argmax_rejects_exceeding_128_elements():
@@ -201,7 +224,12 @@ def test_argmax_rejects_exceeding_128_elements():
         "in": TensorDesc("in", shape=(129,), dtype=DType.INT8),
         "out": TensorDesc("out", shape=(), dtype=DType.INT8),
     }
-    graph1 = Graph(inputs=["in"], outputs=["out"], nodes=[Node(OpType.ARGMAX, "argmax", inputs=["in"], outputs=["out"])], tensors=tensors1)
+    graph1 = Graph(
+        inputs=["in"],
+        outputs=["out"],
+        nodes=[Node(OpType.ARGMAX, "argmax", inputs=["in"], outputs=["out"])],
+        tensors=tensors1,
+    )
     with pytest.raises(ValueError, match="exceed the max index"):
         graph1.validate()
 
@@ -210,7 +238,12 @@ def test_argmax_rejects_exceeding_128_elements():
         "in": TensorDesc("in", shape=(2, 65), dtype=DType.INT8),
         "out": TensorDesc("out", shape=(), dtype=DType.INT8),
     }
-    graph2 = Graph(inputs=["in"], outputs=["out"], nodes=[Node(OpType.ARGMAX, "argmax", inputs=["in"], outputs=["out"])], tensors=tensors2)
+    graph2 = Graph(
+        inputs=["in"],
+        outputs=["out"],
+        nodes=[Node(OpType.ARGMAX, "argmax", inputs=["in"], outputs=["out"])],
+        tensors=tensors2,
+    )
     with pytest.raises(ValueError, match="exceed the max index"):
         graph2.validate()
 
@@ -219,7 +252,12 @@ def test_argmax_rejects_exceeding_128_elements():
         "in": TensorDesc("in", shape=(128,), dtype=DType.INT8),
         "out": TensorDesc("out", shape=(), dtype=DType.INT8),
     }
-    graph3 = Graph(inputs=["in"], outputs=["out"], nodes=[Node(OpType.ARGMAX, "argmax", inputs=["in"], outputs=["out"])], tensors=tensors3)
+    graph3 = Graph(
+        inputs=["in"],
+        outputs=["out"],
+        nodes=[Node(OpType.ARGMAX, "argmax", inputs=["in"], outputs=["out"])],
+        tensors=tensors3,
+    )
     graph3.validate()  # should not raise!
 
 
@@ -298,7 +336,13 @@ def test_conv1d_direct_int8_row_major_layout_verification():
     weights = {"w_conv": w_conv}
 
     nodes = [
-        Node(OpType.CONV1D, "node_conv", inputs=["raw_in"], outputs=["conv_out"], attrs={"weight": "w_conv", "stride": 1, "padding": 0}),
+        Node(
+            OpType.CONV1D,
+            "node_conv",
+            inputs=["raw_in"],
+            outputs=["conv_out"],
+            attrs={"weight": "w_conv", "stride": 1, "padding": 0},
+        ),
         Node(OpType.ARGMAX, "node_argmax", inputs=["conv_out"], outputs=["pred"]),
     ]
 
@@ -315,3 +359,46 @@ def test_conv1d_direct_int8_row_major_layout_verification():
     c_preds = _compile_and_predict(c_code, [flat_input])
     assert c_preds[0] == 2, f"Expected C argmax index 2, got {c_preds[0]}"
     assert c_preds[0] == ref_out
+
+
+class ResidualToy(nn.Module):
+    """Residual network with Skip Connection: y = AdaptiveMaxPool1d(relu(conv1(x)) + conv2(x))"""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv1d(2, 2, kernel_size=3, padding=1)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv1d(2, 2, kernel_size=3, padding=1)
+        self.pool = nn.AdaptiveMaxPool1d(1)
+
+    def forward(self, x):
+        res = x
+        h = self.relu(self.conv1(x))
+        h = self.conv2(h)
+        h = h + res  # Residual Add!
+        return self.pool(h)
+
+
+@pytest.mark.skipif(not _has_gcc(), reason="gcc required for E2E PyTorch diff test")
+def test_pytorch_residual_add_e2e_diff():
+    torch.manual_seed(42)
+    model = ResidualToy().eval()
+    dummy_input = torch.randn(2, 6)
+
+    graph, weights = export_to_kir(model, dummy_input)
+    # Check that ADD op is present in the lowered graph
+    node_types = [n.op_type for n in graph.nodes]
+    assert OpType.ADD in node_types, f"Expected OpType.ADD in {node_types}"
+    assert graph.nodes[-1].op_type == OpType.ARGMAX
+
+    c_code = emit_c(graph, weights, runtime_header=None)
+
+    # Test with 8 distinct test vectors
+    test_samples = [[((trial * 29 + i * 17) % 256) for i in range(12)] for trial in range(8)]
+
+    c_predictions = _compile_and_predict(c_code, test_samples)
+    for sample, c_pred in zip(test_samples, c_predictions):
+        int8_vals = [(b if b < 128 else b - 256) for b in sample]
+        ref_out = run_ref(graph, {"graph_in": int8_vals}, weights)["graph_out"]
+        ref_pred = ref_out[0] if isinstance(ref_out, list) else ref_out
+        assert c_pred == ref_pred, f"Bit-exact mismatch: c={c_pred} vs ref={ref_pred}"

@@ -1,20 +1,19 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import importlib.util
 import json
-import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 
 from .backend.c99.emit_c import emit_c, write_c
-from .budget.report import BudgetReport, audit_graph, format_budget_certificate
+from .budget.report import audit_graph, format_budget_certificate
 from .frontend.pytorch import export_to_kir
-from .ir.kir import DType, Graph, OpType
+from .ir.kir import DType
 from .ref.ref import run_ref
 from .link import ToolchainError, budget_violations, format_link_report, link_spec
 from .search import SearchRow, run_search
@@ -74,6 +73,7 @@ def _load_model_and_input(model_path_str: str, entry_point: str | None = None) -
 
         if model is None:
             import torch.nn as nn
+
             for val in vars(module).values():
                 if isinstance(val, nn.Module):
                     model = val
@@ -97,6 +97,7 @@ def _load_model_and_input(model_path_str: str, entry_point: str | None = None) -
 
     if dummy_input is None:
         import torch
+
         # Default to a 2-element uint8 token sequence if not specified
         dummy_input = torch.tensor([1, 2], dtype=torch.uint8)
 
@@ -159,7 +160,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     try:
         task = load_spec(args.spec)
         loaded = resolve_model_graph(task)
-        graph, weights = loaded.graph, loaded.weights
+        graph = loaded.graph
 
         # Soft contract check: the declared input must match the resolved graph.
         input_desc = graph.tensors[graph.inputs[0]]
@@ -272,10 +273,12 @@ def cmd_search(args: argparse.Namespace) -> int:
         return " ".join(f"{name}={row.params[name]}" for name in names)
 
     print(_color(f"[SEARCH] {task.name}: {len(outcome.rows)} candidates", Style.BOLD + Style.CYAN))
-    print(_color(
-        f"{'candidate':<24} {'arena RAM':>10} {'ROM':>8} {'MACs':>8} {'cycles':>9}  verdict",
-        Style.BOLD + Style.CYAN,
-    ))
+    print(
+        _color(
+            f"{'candidate':<24} {'arena RAM':>10} {'ROM':>8} {'MACs':>8} {'cycles':>9}  verdict",
+            Style.BOLD + Style.CYAN,
+        )
+    )
     for index, row in enumerate(outcome.rows):
         if row.error is not None:
             verdict = _color("ERROR", Style.RED) + _color(f" {row.error}", Style.GRAY)
@@ -284,7 +287,9 @@ def cmd_search(args: argparse.Namespace) -> int:
         if row.feasible:
             verdict = _color("PARETO" if index in outcome.pareto else "fits", Style.GREEN)
         else:
-            verdict = _color("OVER", Style.RED) + _color(" " + "; ".join(row.violations), Style.GRAY)
+            verdict = _color("OVER", Style.RED) + _color(
+                " " + "; ".join(row.violations), Style.GRAY
+            )
         print(
             f"{_label(row):<24} {row.arena_ram_bytes:>10,} {row.total_rom_bytes:>8,} "
             f"{row.total_macs:>8,} {row.estimated_worst_cycles:>9,}  {verdict}"
@@ -298,15 +303,19 @@ def cmd_search(args: argparse.Namespace) -> int:
     report_csv.write_text(search_results_csv(outcome, names), encoding="utf-8")
 
     print()
-    print(_color(
-        f"[SEARCH] {outcome.feasible_count} of {len(outcome.rows)} candidates fit the budget; "
-        f"{len(outcome.pareto)} on the Pareto front -> {report_md}",
-        Style.BOLD + Style.YELLOW,
-    ))
+    print(
+        _color(
+            f"[SEARCH] {outcome.feasible_count} of {len(outcome.rows)} candidates fit the budget; "
+            f"{len(outcome.pareto)} on the Pareto front -> {report_md}",
+            Style.BOLD + Style.YELLOW,
+        )
+    )
     if outcome.feasible_count == 0:
         print(
-            _color(f"[NO CANDIDATE FITS] {task.name}: the declared grid never meets the budget",
-                   Style.BOLD + Style.RED),
+            _color(
+                f"[NO CANDIDATE FITS] {task.name}: the declared grid never meets the budget",
+                Style.BOLD + Style.RED,
+            ),
             file=sys.stderr,
         )
         return 1
@@ -320,10 +329,12 @@ def cmd_link(args: argparse.Namespace) -> int:
         runtime_header = args.runtime_header
         if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
             runtime_header = None
+        target_profile = getattr(args, "target", "host")
         outcome = link_spec(
             task,
             out_dir=Path(args.output) if args.output else None,
             cc=args.cc,
+            target_profile=target_profile,
             alignment=args.alignment,
             runtime_header=runtime_header,
             run=args.run,
@@ -423,8 +434,13 @@ def cmd_audit(args: argparse.Namespace) -> int:
             print(_color(cert, Style.CYAN))
             if getattr(args, "intervals", False) and report.interval_audit is not None:
                 ia = report.interval_audit
-                print("\n" + _color("--- Static Interval Boundary Analysis ---", Style.BOLD + Style.GREEN))
-                print(f"Accumulator overflow safety : {'SAFE (int32)' if ia.int32_overflow_free else 'OVERFLOW DETECTED'}")
+                print(
+                    "\n"
+                    + _color("--- Static Interval Boundary Analysis ---", Style.BOLD + Style.GREEN)
+                )
+                print(
+                    f"Accumulator overflow safety : {'SAFE (int32)' if ia.int32_overflow_free else 'OVERFLOW DETECTED'}"
+                )
                 print(f"Accumulator value range    : [{ia.min_accum:+d}, {ia.max_accum:+d}]")
                 print(f"Saturating requantize ops  : {ia.saturating_ops} / {ia.total_accum_ops}")
                 print("\nTensor Value Bounds:")
@@ -445,8 +461,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
         return 1
 
 
-
-def _generate_test_samples(input_len: int, num_samples: int, is_int8: bool = False) -> list[list[int]]:
+def _generate_test_samples(
+    input_len: int, num_samples: int, is_int8: bool = False
+) -> list[list[int]]:
     """
     Generates test vectors combining critical edge patterns (zeros, max, boundaries, alternating,
     sparse) and deterministic pseudo-random vectors.
@@ -479,6 +496,7 @@ def _generate_test_samples(input_len: int, num_samples: int, is_int8: bool = Fal
 
     # 4. Fill remaining budget with pseudo-random numbers
     import random
+
     rng = random.Random(1337)
     while len(samples) < num_samples:
         samples.append([rng.randint(min_v, max_v) for _ in range(input_len)])
@@ -489,18 +507,22 @@ def _generate_test_samples(input_len: int, num_samples: int, is_int8: bool = Fal
 def cmd_verify(args: argparse.Namespace) -> int:
     gcc_path = args.gcc or shutil.which("gcc")
     if not gcc_path or not Path(gcc_path).exists():
-        print(_color(f"[ERROR] GCC compiler not found at: {gcc_path}", Style.BOLD + Style.RED), file=sys.stderr)
+        print(
+            _color(f"[ERROR] GCC compiler not found at: {gcc_path}", Style.BOLD + Style.RED),
+            file=sys.stderr,
+        )
         return 1
 
     try:
-        import random
         model, dummy_input = _load_model_and_input(args.model_path)
         graph, weights = export_to_kir(model, dummy_input)
 
         c_code = emit_c(graph, weights, runtime_header=None)
 
         input_len = graph.tensors[graph.inputs[0]].num_elements
-        harness = c_code + f"""
+        harness = (
+            c_code
+            + f"""
 #include <stdio.h>
 #include <stdint.h>
 
@@ -520,20 +542,41 @@ int main(void) {{
     return 0;
 }}
 """
+        )
         tmpdir = tempfile.mkdtemp()
         src_file = Path(tmpdir) / "verify_model.c"
         exe_file = Path(tmpdir) / "verify_model.exe"
         try:
             src_file.write_text(harness, encoding="utf-8")
 
-            build_cmd = [str(gcc_path), "-O3", "-Wall", "-Wextra", "-Werror", "-pedantic", str(src_file), "-o", str(exe_file)]
+            build_cmd = [
+                str(gcc_path),
+                "-O3",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                str(src_file),
+                "-o",
+                str(exe_file),
+            ]
             build_res = subprocess.run(build_cmd, capture_output=True, text=True)
             if build_res.returncode != 0:
-                print(_color("[ERROR] GCC build failed:\n" + build_res.stderr, Style.BOLD + Style.RED), file=sys.stderr)
+                print(
+                    _color(
+                        "[ERROR] GCC build failed:\n" + build_res.stderr, Style.BOLD + Style.RED
+                    ),
+                    file=sys.stderr,
+                )
                 return 1
 
             num_samples = max(1, args.samples)
-            print(_color(f"[VERIFY] Running {num_samples} differential test vectors against GCC binary...", Style.BOLD + Style.CYAN))
+            print(
+                _color(
+                    f"[VERIFY] Running {num_samples} differential test vectors against GCC binary...",
+                    Style.BOLD + Style.CYAN,
+                )
+            )
 
             input_name = graph.inputs[0]
             output_name = graph.outputs[0]
@@ -541,8 +584,12 @@ int main(void) {{
             is_int8 = graph.tensors[input_name].dtype == DType.INT8
             samples = _generate_test_samples(input_len, num_samples, is_int8=is_int8)
 
-            input_str = f"{len(samples)}\n" + "\n".join(" ".join(str(x) for x in s) for s in samples) + "\n"
-            run_res = subprocess.run([str(exe_file)], input=input_str, capture_output=True, text=True, check=True)
+            input_str = (
+                f"{len(samples)}\n" + "\n".join(" ".join(str(x) for x in s) for s in samples) + "\n"
+            )
+            run_res = subprocess.run(
+                [str(exe_file)], input=input_str, capture_output=True, text=True, check=True
+            )
             c_outputs = [int(line) for line in run_res.stdout.strip().split()]
 
             for i, sample in enumerate(samples):
@@ -550,14 +597,22 @@ int main(void) {{
                 ref_out = run_ref(graph, {input_name: sample}, weights)[output_name][0]
                 if c_val != ref_out:
                     print(
-                        _color(f"[MISMATCH at sample #{i+1}] Input: {sample} -> C: {c_val} != Ref: {ref_out}", Style.BOLD + Style.RED),
+                        _color(
+                            f"[MISMATCH at sample #{i + 1}] Input: {sample} -> C: {c_val} != Ref: {ref_out}",
+                            Style.BOLD + Style.RED,
+                        ),
                         file=sys.stderr,
                     )
                     return 1
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
-        print(_color(f"[PASSED] All {num_samples} differential samples matched bit-for-bit (100% bit-exact).", Style.BOLD + Style.GREEN))
+        print(
+            _color(
+                f"[PASSED] All {num_samples} differential samples matched bit-for-bit (100% bit-exact).",
+                Style.BOLD + Style.GREEN,
+            )
+        )
         return 0
 
     except Exception as e:
@@ -573,15 +628,29 @@ def cmd_ops(_args: argparse.Namespace) -> int:
     print(divider)
     op_infos = [
         ("EMBEDDING", "Lookup", "Transforms uint8 token indices into dense int8 feature vectors"),
-        ("CONV1D", "Convolution", "1D spatial convolution with stride, padding, and requantization"),
+        (
+            "CONV1D",
+            "Convolution",
+            "1D spatial convolution with stride, padding, and requantization",
+        ),
         ("MATMUL", "Linear / GEMM", "Quantized matrix multiplication with Q31 scale and shift"),
         ("ADD", "Elementwise", "Elementwise tensor addition with saturating requantization"),
-        ("LUT", "Non-linear", "256-entry static lookup table for arbitrary activations (ReLU, GELU, etc.)"),
-        ("MAXPOOL1D", "Pooling", "1D windowed max-pooling over the last axis (axis=0 pools the leading axis)"),
+        (
+            "LUT",
+            "Non-linear",
+            "256-entry static lookup table for arbitrary activations (ReLU, GELU, etc.)",
+        ),
+        (
+            "MAXPOOL1D",
+            "Pooling",
+            "1D windowed max-pooling over the last axis (axis=0 pools the leading axis)",
+        ),
         ("ARGMAX", "Reduction", "Finds index of maximum value; serves as deterministic graph exit"),
     ]
     for name, cat, desc in op_infos:
-        print(f"{_color(name, Style.BOLD + Style.YELLOW):<21} | {_color(cat, Style.BLUE):<23} | {desc}")
+        print(
+            f"{_color(name, Style.BOLD + Style.YELLOW):<21} | {_color(cat, Style.BLUE):<23} | {desc}"
+        )
     print()
     return 0
 
@@ -596,26 +665,47 @@ def create_parser() -> argparse.ArgumentParser:
     # compile
     p_compile = subparsers.add_parser("compile", help="Compile a model to C99 code")
     p_compile.add_argument("model_path", help="Path to PyTorch model .py file")
-    p_compile.add_argument("-o", "--output", default="model.c", help="Output C source path (default: model.c)")
+    p_compile.add_argument(
+        "-o", "--output", default="model.c", help="Output C source path (default: model.c)"
+    )
     p_compile.add_argument("--entry-point", default=None, help="Entry point class or function name")
-    p_compile.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
-    p_compile.add_argument("--runtime-header", default="kiln_runtime.h", help="Runtime header to include (or None)")
+    p_compile.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
+    p_compile.add_argument(
+        "--runtime-header", default="kiln_runtime.h", help="Runtime header to include (or None)"
+    )
 
     # build (declarative kiln.yaml pipeline)
     p_build = subparsers.add_parser("build", help="Build a declarative kiln.yaml task spec to C99")
     p_build.add_argument("spec", help="Path to the kiln.yaml task specification")
-    p_build.add_argument("-o", "--output", default=None, help="Output directory (default: <spec dir>/build)")
-    p_build.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
-    p_build.add_argument("--runtime-header", default="kiln_runtime.h", help="Runtime header to include (or None)")
+    p_build.add_argument(
+        "-o", "--output", default=None, help="Output directory (default: <spec dir>/build)"
+    )
+    p_build.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
+    p_build.add_argument(
+        "--runtime-header", default="kiln_runtime.h", help="Runtime header to include (or None)"
+    )
 
     # search (compile-time architecture exploration over a `search:` grid)
     p_search = subparsers.add_parser(
         "search",
         help="Enumerate a kiln.yaml search grid and report the RAM/ROM/capacity Pareto front (supported: hazard example)",
     )
-    p_search.add_argument("spec", help="Path to the kiln.yaml task specification (needs a search: block)")
-    p_search.add_argument("-o", "--output", default=None, help="Output directory for the report (default: <spec dir>/search)")
-    p_search.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
+    p_search.add_argument(
+        "spec", help="Path to the kiln.yaml task specification (needs a search: block)"
+    )
+    p_search.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Output directory for the report (default: <spec dir>/search)",
+    )
+    p_search.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
 
     # link (Phase 4: compile + link + measure + replay the emitted C)
     p_link = subparsers.add_parser(
@@ -623,24 +713,56 @@ def create_parser() -> argparse.ArgumentParser:
         help="Compile and link a kiln.yaml build under strict flags, measure the image and replay it",
     )
     p_link.add_argument("spec", help="Path to the kiln.yaml task specification")
-    p_link.add_argument("-o", "--output", default=None, help="Output directory (default: <spec dir>/link)")
-    p_link.add_argument("--cc", default=None, help="C compiler to use (default: $KILN_CC, then gcc/cc/clang on PATH)")
-    p_link.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
-    p_link.add_argument("--runtime-header", default=None, help="Runtime header to include (default: None = self-contained translation unit)")
-    p_link.add_argument("--run", action="store_true", help="Execute the linked binary on the generated vectors")
+    p_link.add_argument(
+        "-o", "--output", default=None, help="Output directory (default: <spec dir>/link)"
+    )
+    p_link.add_argument(
+        "--cc",
+        default=None,
+        help="C compiler to use (default: $KILN_CC, then gcc/cc/clang on PATH)",
+    )
+    p_link.add_argument(
+        "--target",
+        default="host",
+        choices=["host", "cortex-m0plus", "cortex-m4", "riscv32"],
+        help="Target architectural profile for host or cross compilation (default: host)",
+    )
+    p_link.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
+    p_link.add_argument(
+        "--runtime-header",
+        default=None,
+        help="Runtime header to include (default: None = self-contained translation unit)",
+    )
+    p_link.add_argument(
+        "--run", action="store_true", help="Execute the linked binary on the generated vectors"
+    )
 
     # audit
     p_audit = subparsers.add_parser("audit", help="Perform static footprint & latency audit")
     p_audit.add_argument("model_path", help="Path to PyTorch model .py file")
-    p_audit.add_argument("--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)")
+    p_audit.add_argument(
+        "--alignment", type=int, default=4, help="Arena memory alignment in bytes (default: 4)"
+    )
     p_audit.add_argument("--json", action="store_true", help="Output report as structured JSON")
-    p_audit.add_argument("--intervals", action="store_true", help="Display static interval boundary propagation analysis")
-
+    p_audit.add_argument(
+        "--intervals",
+        action="store_true",
+        help="Display static interval boundary propagation analysis",
+    )
 
     # verify
-    p_verify = subparsers.add_parser("verify", help="Verify model via GCC build & differential testing")
+    p_verify = subparsers.add_parser(
+        "verify", help="Verify model via GCC build & differential testing"
+    )
     p_verify.add_argument("model_path", help="Path to PyTorch model .py file")
-    p_verify.add_argument("--samples", type=int, default=100, help="Number of random differential samples (default: 100)")
+    p_verify.add_argument(
+        "--samples",
+        type=int,
+        default=100,
+        help="Number of random differential samples (default: 100)",
+    )
     p_verify.add_argument("--gcc", default=None, help="Custom path to GCC compiler executable")
 
     # ops
