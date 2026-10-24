@@ -35,8 +35,15 @@ python -m pip install -e ".[frontend,test]"
 
 ```bash
 python -m kiln doctor
+python -m kiln selftest
 python -m kiln ops
 ```
+
+`kiln selftest` is deliberately board-free. It exercises KIR serialization,
+static int32 safety, VM execution, and parity with the independent reference
+interpreter without importing PyTorch or requiring a C compiler. If this passes,
+the core installation is usable. `kiln doctor --json` is available for scripts
+that need to inspect optional capabilities.
 
 `kiln ops` is deliberately small: the seven operations shown are the complete
 KIR v1 instruction set. Unsupported graph constructs fail with a structured
@@ -77,6 +84,19 @@ python -m kiln link examples/hazard/kiln.yaml --run
 
 The report distinguishes static estimates from observed execution. A host run
 does not count as evidence for a microcontroller target.
+
+The shortest no-board tutorial is therefore:
+
+```bash
+python -m kiln selftest
+python -m kiln validate examples/vm/hello.kir.json
+python -m kiln vm examples/vm/hello.kir.json \
+  --input examples/vm/input.json --json --trace
+```
+
+This path is intentionally the first success criterion for students and
+researchers. PyTorch export and native linking are separate capabilities, not
+requirements for learning the KIR contract or running a model.
 
 ## 5. Choose the next path
 

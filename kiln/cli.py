@@ -13,7 +13,7 @@ from typing import Any
 
 from .backend.c99.emit_c import emit_c, write_c
 from .budget.report import audit_graph, format_budget_certificate
-from .ir.kir import DType
+from .ir.kir import DType, Graph, Node, OpType, TensorDesc
 from .ir.serialization import dumps_bundle, loads_bundle
 from .ref.ref import run_ref
 from .link import (
@@ -897,49 +897,140 @@ def cmd_ops(_args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_doctor(_args: argparse.Namespace) -> int:
-    """Report the local tools needed for a reproducible Kiln workflow."""
-    checks: list[tuple[str, bool, str]] = []
+def cmd_selftest(args: argparse.Namespace) -> int:
+    """Run a board-free smoke test for the installed Kiln core."""
+    graph = Graph(
+        inputs=["x"],
+        outputs=["label"],
+        tensors={
+            "x": TensorDesc("x", (2,), DType.INT8),
+            "scores": TensorDesc("scores", (2,), DType.INT8),
+            "label": TensorDesc("label", (), DType.INT8),
+        },
+        nodes=[
+            Node(OpType.LUT, "lut", ["x"], ["scores"], {"table": list(range(-128, 128))}),
+            Node(OpType.ARGMAX, "argmax", ["scores"], ["label"]),
+        ],
+    )
+    inputs = {"x": [-2, 7]}
 
-    def add(label: str, ok: bool, detail: str) -> None:
-        checks.append((label, ok, detail))
-        status = "OK" if ok else "MISSING"
-        print(f"[{status:<7}] {label:<18} {detail}")
+    try:
+        # Round-trip through the public bundle serializer. This keeps the smoke
+        # test independent of the repository's examples and of PyTorch.
+        serialized = dumps_bundle(graph, {})
+        loaded_graph, loaded_weights = loads_bundle(serialized)
+        report = audit_graph(loaded_graph, loaded_weights)
+        if not report.int32_overflow_free:
+            raise ValueError("the built-in self-test graph did not pass int32 safety")
+        result = VirtualMachine(loaded_graph, loaded_weights).run(inputs)
+        reference = run_ref(loaded_graph, inputs, loaded_weights)
+        if result.outputs != reference or result.outputs != {"label": [1]}:
+            raise ValueError(
+                f"VM/reference mismatch: vm={result.outputs!r}, reference={reference!r}"
+            )
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"status": "failed", "error": str(exc)}, sort_keys=True))
+        else:
+            print(_color(f"[FAILED] Kiln self-test: {exc}", Style.BOLD + Style.RED))
+        return 1
 
-    add("Python", sys.version_info >= (3, 10), sys.version.split()[0])
-    for import_name, distribution in (("torch", "torch"), ("yaml", "PyYAML"), ("pytest", "pytest")):
+    payload = {
+        "status": "passed",
+        "checks": ["KIR serialization", "static int32 safety", "KIR VM", "reference parity"],
+        "outputs": result.outputs,
+        "metrics": {
+            "instructions": result.metrics.instructions,
+            "cycles": result.metrics.cycles,
+            "arena_bytes": result.metrics.arena_bytes,
+            "allocation_bytes": result.metrics.allocation_bytes,
+        },
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(_color("[PASSED] Kiln core self-test", Style.BOLD + Style.GREEN))
+        print("         KIR serialization     OK")
+        print("         static int32 safety   OK")
+        print("         KIR VM execution      OK")
+        print("         reference parity      OK")
+        print(
+            f"         outputs={result.outputs} cycles={result.metrics.cycles} "
+            f"arena={result.metrics.arena_bytes} B"
+        )
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Report required, optional, and development tools for Kiln workflows."""
+    checks: list[dict[str, Any]] = []
+
+    def add(label: str, ok: bool, detail: str, category: str) -> None:
+        checks.append({"label": label, "available": ok, "detail": detail, "category": category})
+
+    add("Python", sys.version_info >= (3, 10), sys.version.split()[0], "required")
+    for import_name, distribution, category in (
+        ("PyYAML", "PyYAML", "required"),
+        ("torch", "torch", "frontend"),
+        ("pytest", "pytest", "test"),
+    ):
         try:
             version = importlib.metadata.version(distribution)
         except importlib.metadata.PackageNotFoundError:
-            add(import_name, False, "install the test environment")
+            add(import_name, False, "install the corresponding optional extra", category)
         else:
-            add(import_name, True, version)
+            add(import_name, True, version, category)
 
-    for name in ("gcc", "clang", "ruff", "mypy"):
+    for name, category in (
+        ("gcc", "native-link"),
+        ("clang", "native-link"),
+        ("ruff", "development"),
+        ("mypy", "development"),
+    ):
         path = shutil.which(name)
-        add(name, path is not None, path or "not on PATH")
+        add(name, path is not None, path or "not on PATH", category)
 
     for target, profile in TARGET_PROFILES.items():
         if target == "host":
             continue
         compiler = shutil.which(profile.default_cc)
-        runner = shutil.which(profile.runner) if profile.runner else None
-        add(f"{target} compiler", compiler is not None, compiler or profile.default_cc)
+        add(f"{target} compiler", compiler is not None, compiler or profile.default_cc, "target")
         if profile.runner is None:
-            add(
-                f"{target} runner",
-                False,
-                f"not configured ({profile.execution})",
-            )
+            add(f"{target} runner", False, f"not configured ({profile.execution})", "target")
         else:
-            add(f"{target} runner", runner is not None, runner or profile.runner)
+            runner = shutil.which(profile.runner)
+            add(f"{target} runner", runner is not None, runner or profile.runner, "target")
 
-    required = [ok for label, ok, _ in checks if label in {"Python", "torch", "yaml", "gcc"}]
-    if all(required):
-        print("[READY  ] Kiln core workflow is available")
-        return 0
-    print("[BLOCKED] Install the missing core requirements before building models", file=sys.stderr)
-    return 1
+    required_ok = all(check["available"] for check in checks if check["category"] == "required")
+    strict_categories = {"required", "frontend", "test", "native-link", "development"}
+    strict_ok = all(
+        check["available"] for check in checks if check["category"] in strict_categories
+    )
+    payload = {
+        "status": "ready" if required_ok else "blocked",
+        "strict_status": "ready" if strict_ok else "incomplete",
+        "checks": checks,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        for check in checks:
+            if check["available"]:
+                status = "OK"
+            elif check["category"] == "required":
+                status = "MISSING"
+            else:
+                status = "OPTIONAL"
+            print(f"[{status:<8}] {check['label']:<24} {check['detail']}")
+        if required_ok:
+            print("[READY   ] Kiln core and VM workflow are available")
+            if not strict_ok:
+                print(
+                    "[INFO    ] Add optional extras/tools for PyTorch export, native link, or development"
+                )
+        else:
+            print("[BLOCKED ] Install the missing core requirements", file=sys.stderr)
+    return 0 if required_ok and (not args.strict or strict_ok) else 1
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -1122,7 +1213,21 @@ def create_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("ops", help="List supported Kiln IR operations")
 
     # doctor
-    subparsers.add_parser("doctor", help="Check local tools for a reproducible Kiln workflow")
+    p_doctor = subparsers.add_parser(
+        "doctor", help="Check required and optional tools for a reproducible Kiln workflow"
+    )
+    p_doctor.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    p_doctor.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return failure unless frontend, test, native-link, and development tools are present",
+    )
+
+    # selftest
+    p_selftest = subparsers.add_parser(
+        "selftest", help="Run a board-free smoke test of KIR, safety analysis, and the VM"
+    )
+    p_selftest.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     return parser
 
@@ -1157,6 +1262,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ops(args)
     elif args.command == "doctor":
         return cmd_doctor(args)
+    elif args.command == "selftest":
+        return cmd_selftest(args)
     return 0
 
 

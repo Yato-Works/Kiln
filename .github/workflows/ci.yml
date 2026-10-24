@@ -38,6 +38,8 @@ jobs:
         run: |
           python -m kiln ops
           python -m kiln --help
+          python -m kiln selftest --json
+          python -m kiln doctor --json
 
       - name: Phase 1 certificate (emits C, builds it with gcc, scores it)
         run: python -m examples.kws.evaluate

@@ -91,17 +91,23 @@ pip install -e ".[test]"
 For the minimal torch-free KIR compiler, install `pip install -e .`; add
 `.[frontend]` only when exporting a PyTorch model.
 
-Three commands — no dataset download needed:
+A minimal board-free workflow — no dataset download needed:
 
 ```bash
-python -m kiln doctor                       # 0. check the local toolchain
-python -m kiln ops                            # 1. the 7 IR operations (the whole instruction set)
-python -m kiln audit examples/kws/model.py    # 2. static footprint certificate (add --json for machines)
-python -m pytest tests/ -q                    # 3. every guarantee (all tests, ~2 min)
+python -m kiln doctor                         # 0. required vs optional tools
+python -m kiln selftest                       # 1. board-free install smoke test
+python -m kiln ops                            # 2. the 7 IR operations (the whole instruction set)
+python -m kiln vm examples/vm/hello.kir.json  # 3. run a portable KIR bundle
+python -m pytest tests/ -q                    # 4. every guarantee (all tests, ~2 min)
 ```
 
-The Phase 4 link tests compile and run C, so they skip themselves when the host
-has no C compiler; nothing else in the suite needs one.
+`doctor` exits successfully when the torch-free core and VM are available.
+PyTorch, a C compiler, and development tools are reported as optional workflow
+capabilities; use `doctor --strict` when validating a full contributor machine.
+`doctor --json` and `selftest --json` are stable machine-readable entry points
+for CI, IDE integrations, and teaching scripts. The Phase 4 link tests compile
+and run C, so they skip themselves when the host has no C compiler; nothing else
+in the core VM workflow needs one.
 
 Emit the C yourself and build it with any C99 compiler:
 
