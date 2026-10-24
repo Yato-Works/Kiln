@@ -49,6 +49,18 @@ CALIBRATION_QUANTILE: Final = 0.999
 #: ReLU as a 256-entry int8 lookup table indexed by the raw byte value.
 RELU_TABLE: Final[tuple[int, ...]] = tuple(max(0, index) for index in range(-128, 128))
 
+# The shipped checkpoint's calibration scales are part of the frozen bundle
+# contract.  Keeping them explicitly prevents a PyTorch implementation change
+# in torch.quantile or the convolution kernels from changing the portable KIR
+# artifact when the exporter is run on another machine.
+FROZEN_ACTIVATION_SCALES: Final[tuple[float, ...]] = (
+    0.02276379667867826,
+    0.05040322326299712,
+    0.10322167554239589,
+    0.11083642704280343,
+    0.057438016876461,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class KwsKilnGraph:
@@ -96,8 +108,14 @@ def _scalar_attr(value: int | tuple[int, ...]) -> int:
 def calibrate_kws_graph(
     model: nn.Sequential,
     calibration_specs: torch.Tensor,
+    *,
+    activation_scales: tuple[float, ...] | None = None,
 ) -> KwsKilnGraph:
     """Lowers ``model`` into Kiln IR with int8 weights and calibration scales."""
+    if activation_scales is not None and len(activation_scales) != sum(
+        isinstance(layer, nn.Conv1d) for layer in model
+    ):
+        raise ValueError("activation_scales must contain one entry per convolution")
     calibration = quantize_logmel_to_int8(calibration_specs).float() / 127.0
     layer_outputs = _layer_outputs(model, calibration)
 
@@ -116,6 +134,7 @@ def calibrate_kws_graph(
     source_scale = INPUT_SCALE
     stage = 0
 
+    conv_index = 0
     for index, layer in enumerate(model):
         output = layer_outputs[index]
         shape = tuple(int(dim) for dim in output.shape[1:])
@@ -124,9 +143,12 @@ def calibrate_kws_graph(
             weight_name = f"w{stage}"
             weight_q, weight_scale = quantize_tensor(layer.weight.data)
             activation = output.abs().flatten()
-            output_scale = float(
-                torch.quantile(activation, CALIBRATION_QUANTILE).item()
-            ) / 127.0
+            if activation_scales is None:
+                output_scale = (
+                    float(torch.quantile(activation, CALIBRATION_QUANTILE).item()) / 127.0
+                )
+            else:
+                output_scale = float(activation_scales[conv_index])
             target = f"t_conv{stage}"
             weights[weight_name] = weight_q
             tensors[target] = TensorDesc(
@@ -134,9 +156,7 @@ def calibrate_kws_graph(
                 shape=shape,
                 dtype=DType.INT8,
                 quant=QuantParam(
-                    *compute_multiplier_and_shift(
-                        (source_scale * weight_scale) / output_scale
-                    )
+                    *compute_multiplier_and_shift((source_scale * weight_scale) / output_scale)
                 ),
             )
             nodes.append(
@@ -153,6 +173,7 @@ def calibrate_kws_graph(
                 )
             )
             scales.append(output_scale)
+            conv_index += 1
             source, source_scale = target, output_scale
 
         elif isinstance(layer, nn.ReLU):
@@ -235,4 +256,9 @@ def build_kws_model_graph(weights_path: str | None = None) -> KwsKilnGraph:
             "`python -m examples.kws.precompute`"
         )
     specs, _, (_, val_idx, _) = load_splits()
-    return calibrate_kws_graph(load_kws_model(weights_path), specs[val_idx])
+    frozen_scales = FROZEN_ACTIVATION_SCALES if weights_path is None else None
+    return calibrate_kws_graph(
+        load_kws_model(weights_path),
+        specs[val_idx],
+        activation_scales=frozen_scales,
+    )

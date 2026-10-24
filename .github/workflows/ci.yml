@@ -87,6 +87,11 @@ jobs:
           grep -F "Evidence              : qemu-system-arm" \
             "$RUNNER_TEMP/kiln-qemu-link/execution_certificate.txt"
 
+      - name: Generate repository certificate fixtures
+        # The RP2040 adapter test consumes this intentionally generated local
+        # certificate; the build directory itself remains ignored.
+        run: python -m kiln build examples/hazard/kiln.yaml
+
       - name: Test suite
         # The 107 MB Speech Commands archive is not vendored, so the tests that
         # need raw WAVs report as skipped; everything else (including the KWS

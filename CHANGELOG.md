@@ -6,6 +6,13 @@ All notable changes to Kiln are recorded here.
 
 - Continue expanding verified KIR bundles and target backends.
 
+## [2.0.1] - 2026-10-24
+
+- Make the shipped KWS bundle reproducible across supported PyTorch versions by
+  freezing its calibration scales as part of the artifact contract.
+- Generate the Hazard certificate fixture before the RP2040 adapter test in CI.
+- Correct the V2 GitHub Release notes formatting.
+
 ## [2.0.0] - 2026-10-24
 
 - Kiln V2 foundation release: a board-free, reproducible TinyML compiler core.
