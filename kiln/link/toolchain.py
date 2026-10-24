@@ -73,6 +73,7 @@ class TargetProfile:
     execution: str = "native"
     startup: str | None = None
     harness_output: str = "stdio"
+    run_timeout_seconds: float = 30.0
 
 
 TARGET_PROFILES: Mapping[str, TargetProfile] = {
@@ -208,11 +209,24 @@ def detect_toolchain(cc: str | None = None, *, target: str = "host") -> Toolchai
     )
 
 
-def _run(argv: Sequence[str], *, what: str) -> str:
-    result = subprocess.run(list(argv), capture_output=True, text=True)
-    if result.returncode != 0:
+def _run(
+    argv: Sequence[str],
+    *,
+    what: str,
+    timeout: float | None = None,
+    accepted_returncodes: Sequence[int] = (0,),
+    include_stderr: bool = False,
+) -> str:
+    try:
+        result = subprocess.run(list(argv), capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        detail = f" after {timeout:g}s" if timeout is not None else ""
+        raise ToolchainError(f"{what} timed out{detail}: {' '.join(argv)}") from exc
+    if result.returncode not in accepted_returncodes:
         detail = (result.stderr or result.stdout).strip()
         raise ToolchainError(f"{what} failed:\n  {' '.join(argv)}\n{detail}")
+    if include_stderr:
+        return result.stdout + result.stderr
     return result.stdout
 
 
@@ -225,6 +239,11 @@ def compile_object(
 ) -> None:
     """Compiles one translation unit with the strict flags and target architecture flags."""
     flags = STRICT_FLAGS
+    if toolchain.profile.execution != "native" and source.suffix.lower() not in {".s", ".asm"}:
+        # Bare-metal images provide their own small libc surface.  Prevent GCC
+        # from rewriting those definitions back into calls to compiler builtins
+        # (notably memcpy/memset), which would recurse or require newlib.
+        flags += ("-ffreestanding", "-fno-builtin")
     if source.suffix.lower() in {".s", ".asm"}:
         # The semihosting gate is deliberately a tiny assembler translation unit;
         # C dialect and C diagnostic flags do not apply to it.
@@ -287,7 +306,18 @@ def run_executable(
         args = [argument.replace("{exe}", str(exe)) for argument in toolchain.profile.runner_args]
         if "{exe}" not in " ".join(toolchain.profile.runner_args):
             args.append(str(exe))
-        return _run([resolved_runner, *args], what=f"running {exe.name} via {runner}")
+        semihosting = toolchain.profile.harness_output == "semihosting"
+        # QEMU's native semihosting writes SYS_WRITE0 text to stderr and uses
+        # exit status 1 for the ADP_Stopped_ApplicationExit reason.  Accept
+        # precisely that documented transport behavior; prediction parsing
+        # still fails closed if the harness did not actually produce its rows.
+        return _run(
+            [resolved_runner, *args],
+            what=f"running {exe.name} via {runner}",
+            timeout=toolchain.profile.run_timeout_seconds,
+            accepted_returncodes=(0, 1) if semihosting else (0,),
+            include_stderr=semihosting,
+        )
     return _run([str(exe)], what=f"running {exe.name}")
 
 

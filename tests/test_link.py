@@ -396,6 +396,19 @@ def test_semihosting_harness_is_freestanding() -> None:
     assert "kiln_exit(0)" in source
 
 
+def test_qemu_startup_provides_freestanding_memory_primitives() -> None:
+    assert "void *memcpy" in CORTEX_M_STARTUP_C
+    assert "void *memset" in CORTEX_M_STARTUP_C
+    assert "#include <stddef.h>" in CORTEX_M_STARTUP_C
+
+
+def test_bare_metal_compile_disables_hosted_builtins() -> None:
+    from kiln.link.toolchain import STRICT_FLAGS
+
+    assert "-ffreestanding" not in STRICT_FLAGS
+    assert "-fno-builtin" not in STRICT_FLAGS
+
+
 @requires_compiler
 def test_qemu_c_sources_pass_the_strict_c_gate(tmp_path: Path) -> None:
     toolchain = detect_toolchain()
@@ -456,6 +469,27 @@ def test_qemu_runner_expands_the_firmware_argument(
             str(executable),
         ]
     ]
+
+
+def test_qemu_semihosting_accepts_exit_status_one_and_stderr_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import kiln.link.toolchain as toolchain_module
+    from kiln.link.toolchain import TARGET_PROFILES, Toolchain, run_executable
+
+    monkeypatch.setattr(toolchain_module.shutil, "which", lambda _name: "qemu-system-arm")
+    monkeypatch.setattr(
+        toolchain_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout="", stderr="0 4\n"),
+    )
+
+    output = run_executable(
+        Toolchain(cc="arm-none-eabi-gcc", profile=TARGET_PROFILES["cortex-m3-qemu"]),
+        tmp_path / "firmware.elf",
+    )
+
+    assert output == "0 4\n"
 
 
 def test_bare_metal_profiles_refuse_untruthful_replay(tmp_path: Path) -> None:

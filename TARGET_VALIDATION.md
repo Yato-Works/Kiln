@@ -24,7 +24,10 @@ python -m kiln link examples/hazard/kiln.yaml \
 
 The CI job installs `gcc-arm-none-eabi` and `qemu-system-arm` and runs this
 command. QEMU output is used for deterministic harness replay; it does not
-invent a cycle count.
+invent a cycle count. Native semihosting writes the harness lines to QEMU's
+stderr and may return process status `1` for the ARM semihosting application
+exit reason; Kiln handles both details explicitly and still requires all
+expected prediction rows before accepting the replay.
 
 ## Hardware runner contract
 
