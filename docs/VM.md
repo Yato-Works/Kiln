@@ -13,6 +13,17 @@ python -m kiln validate model.kir.json
 python -m kiln vm model.kir.json --json --trace
 ```
 
+Traces are reviewable artifacts and can be replayed:
+
+```bash
+python -m kiln vm model.kir.json --trace --trace-output run.trace.json
+python -m kiln vm model.kir.json --replay-trace run.trace.json --json
+```
+
+For negative testing, `--max-cycles N` enforces a virtual execution budget and
+`--fault-node NODE` deliberately fails before a named KIR node. These controls
+are intended for CI, tutorials, and fault-injection experiments.
+
 For a single-input graph, `--input` may point to a JSON array. For multiple
 inputs, provide an object keyed by tensor name. `--input -` reads the same JSON
 document from standard input. If omitted, the VM uses deterministic zero-valued
@@ -24,6 +35,13 @@ inputs, which is useful for smoke tests.
 
 The `--json` output contains `outputs`, `metrics`, and, with `--trace`, one event
 for each KIR node.
+
+The repository's board-free smoke test is runnable from a clean checkout:
+
+```bash
+python -m kiln vm examples/vm/hello.kir.json \
+  --input examples/vm/input.json --json --trace
+```
 
 ## Execution contract
 

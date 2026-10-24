@@ -28,7 +28,7 @@ from .search.report import format_search_report, search_results_csv
 from .spec import load_spec, resolve_model_graph
 from .spec.pipeline import SafetyViolationError, emit_spec_artifacts
 from .link.toolchain import TARGET_PROFILES
-from .vm import VMError, VirtualMachine
+from .vm import VMError, VirtualMachine, trace_from_dict, trace_to_dict
 
 
 def _export_model_to_kir(model: Any, dummy_input: Any) -> tuple[Any, dict[str, Any]]:
@@ -804,7 +804,17 @@ def cmd_vm(args: argparse.Namespace) -> int:
                 inputs = {vm.graph.inputs[0]: raw}
             else:
                 raise VMError("multi-input bundles require a JSON object keyed by input name")
-        result = vm.run(inputs)
+        if args.replay_trace:
+            expected_trace = trace_from_dict(
+                json.loads(Path(args.replay_trace).read_text(encoding="utf-8"))
+            )
+            result = vm.replay(inputs, expected_trace, max_cycles=args.max_cycles)
+        else:
+            result = vm.run(
+                inputs,
+                max_cycles=args.max_cycles,
+                fault_node=args.fault_node,
+            )
     except (OSError, KeyError, json.JSONDecodeError, TypeError, ValueError, VMError) as exc:
         print(
             _color(f"[ERROR] VM execution failed: {exc}", Style.BOLD + Style.RED), file=sys.stderr
@@ -825,16 +835,12 @@ def cmd_vm(args: argparse.Namespace) -> int:
         },
     }
     if args.trace:
-        payload["trace"] = [
-            {
-                "node": event.node,
-                "op": event.op,
-                "inputs": event.inputs,
-                "outputs": event.outputs,
-                "cycles": event.cycles,
-            }
-            for event in result.trace
-        ]
+        payload["trace"] = trace_to_dict(result.trace)
+    if args.trace_output:
+        Path(args.trace_output).write_text(
+            json.dumps(trace_to_dict(result.trace), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
@@ -1099,6 +1105,14 @@ def create_parser() -> argparse.ArgumentParser:
     p_vm.add_argument("--alignment", type=int, default=4, help="Arena alignment in bytes")
     p_vm.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     p_vm.add_argument("--trace", action="store_true", help="Include one event per KIR node")
+    p_vm.add_argument("--trace-output", default=None, help="Write the trace JSON to this path")
+    p_vm.add_argument("--replay-trace", default=None, help="Replay and verify a saved trace JSON")
+    p_vm.add_argument(
+        "--max-cycles", type=int, default=None, help="Fail if the virtual cycle budget is exceeded"
+    )
+    p_vm.add_argument(
+        "--fault-node", default=None, help="Intentionally fail before executing this node"
+    )
 
     # ops
     subparsers.add_parser("ops", help="List supported Kiln IR operations")

@@ -22,7 +22,15 @@ from ..ir.memory import plan_graph_memory
 from ..ir.sem import INT8_MAX, INT8_MIN, INT32_MAX, INT32_MIN, lut_lookup, requantize
 from ..ir.serialization import loads_bundle
 
-__all__ = ("VMError", "VMMetrics", "VMResult", "VMTraceEvent", "VirtualMachine")
+__all__ = (
+    "VMError",
+    "VMMetrics",
+    "VMResult",
+    "VMTraceEvent",
+    "VirtualMachine",
+    "trace_from_dict",
+    "trace_to_dict",
+)
 
 
 _VOCAB_SIZE: Final = 256
@@ -65,6 +73,55 @@ class VMResult:
     outputs: dict[str, list[int]]
     metrics: VMMetrics
     trace: tuple[VMTraceEvent, ...]
+
+
+def trace_to_dict(trace: Sequence[VMTraceEvent]) -> list[dict[str, Any]]:
+    """Serialize a trace into a stable, JSON-compatible representation."""
+    return [
+        {
+            "node": event.node,
+            "op": event.op,
+            "inputs": list(event.inputs),
+            "outputs": list(event.outputs),
+            "cycles": event.cycles,
+        }
+        for event in trace
+    ]
+
+
+def trace_from_dict(document: Any) -> tuple[VMTraceEvent, ...]:
+    """Validate and load a trace previously produced by :func:`trace_to_dict`."""
+    if not isinstance(document, list):
+        raise VMError("VM trace must be an array")
+    events: list[VMTraceEvent] = []
+    for index, raw in enumerate(document):
+        if not isinstance(raw, Mapping):
+            raise VMError(f"VM trace event {index} must be an object")
+        required = {"node", "op", "inputs", "outputs", "cycles"}
+        if set(raw) != required:
+            raise VMError(f"VM trace event {index} has invalid fields")
+        if not isinstance(raw["node"], str) or not isinstance(raw["op"], str):
+            raise VMError(f"VM trace event {index} names must be strings")
+        if not isinstance(raw["inputs"], list) or not all(
+            isinstance(value, str) for value in raw["inputs"]
+        ):
+            raise VMError(f"VM trace event {index} inputs must be a string array")
+        if not isinstance(raw["outputs"], list) or not all(
+            isinstance(value, str) for value in raw["outputs"]
+        ):
+            raise VMError(f"VM trace event {index} outputs must be a string array")
+        if not _is_int(raw["cycles"]) or raw["cycles"] < 0:
+            raise VMError(f"VM trace event {index} cycles must be a non-negative integer")
+        events.append(
+            VMTraceEvent(
+                raw["node"],
+                raw["op"],
+                tuple(raw["inputs"]),
+                tuple(raw["outputs"]),
+                raw["cycles"],
+            )
+        )
+    return tuple(events)
 
 
 def _is_int(value: Any) -> bool:
@@ -347,8 +404,16 @@ class VirtualMachine:
             raise VMError(f"cannot load KIR bundle {path}: {exc}") from exc
         return cls(graph, weights, alignment=alignment)
 
-    def run(self, inputs: Mapping[str, Sequence[int]]) -> VMResult:
+    def run(
+        self,
+        inputs: Mapping[str, Sequence[int]],
+        *,
+        max_cycles: int | None = None,
+        fault_node: str | None = None,
+    ) -> VMResult:
         """Execute one input mapping and return outputs plus reproducible evidence."""
+        if max_cycles is not None and (not _is_int(max_cycles) or max_cycles < 0):
+            raise VMError("max_cycles must be a non-negative integer")
         expected, provided = set(self.graph.inputs), set(inputs)
         if missing := expected - provided:
             raise VMError(f"missing graph inputs: {', '.join(sorted(missing))}")
@@ -368,10 +433,17 @@ class VirtualMachine:
         trace: list[VMTraceEvent] = []
         cycles = 0
         for node in self.graph.nodes:
+            if fault_node == node.name:
+                raise VMError(f"fault injection triggered at node {node.name!r}")
             handler = _HANDLERS.get(node.op_type.value)
             if handler is None:
                 raise VMError(f"KIR VM does not implement op {node.op_type.value!r}")
             values, node_cycles = handler(node, self.graph, env, self.weights)
+            if max_cycles is not None and cycles + node_cycles > max_cycles:
+                raise VMError(
+                    f"VM cycle budget exceeded at node {node.name!r}: "
+                    f"{cycles + node_cycles} > {max_cycles}"
+                )
             output = self.graph.tensors[node.outputs[0]]
             if len(values) != output.num_elements:
                 raise VMError(f"node {node.name!r} produced the wrong number of values")
@@ -400,3 +472,25 @@ class VirtualMachine:
         return VMResult(
             {name: list(env[name]) for name in self.graph.outputs}, metrics, tuple(trace)
         )
+
+    def replay(
+        self,
+        inputs: Mapping[str, Sequence[int]],
+        expected_trace: Sequence[VMTraceEvent],
+        *,
+        max_cycles: int | None = None,
+    ) -> VMResult:
+        """Re-execute inputs and fail if the instruction trace changed."""
+        result = self.run(inputs, max_cycles=max_cycles)
+        expected = tuple(expected_trace)
+        if result.trace != expected:
+            first_difference = next(
+                (
+                    index
+                    for index, pair in enumerate(zip(result.trace, expected))
+                    if pair[0] != pair[1]
+                ),
+                min(len(result.trace), len(expected)),
+            )
+            raise VMError(f"VM trace mismatch at event {first_difference}")
+        return result
