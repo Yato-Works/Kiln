@@ -26,6 +26,9 @@ dependencies = [
 frontend = [
     "torch>=2.0.0",
 ]
+hardware = [
+    "pyserial>=3.5",
+]
 test = [
     "pytest>=7.0.0",
     "hypothesis>=6.0.0",

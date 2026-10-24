@@ -31,6 +31,22 @@ Copy `runner.example.json` and replace the commands with the flashing and
 capture tool used by your board. The commands must be argv arrays and must
 contain `{exe}` where the linked ELF should be passed.
 
+For a UART-connected board, Kiln includes a small capture helper. Install the
+optional dependency with `python -m pip install -e ".[hardware]"` and use it
+as the `run` command after adapting the flash command to your board SDK:
+
+```json
+{
+  "name": "rp2040-uart-example",
+  "flash": ["your-board-flash-tool", "{exe}"],
+  "run": ["python", "scripts/capture_serial.py", "--port", "COM7", "--baud", "115200"],
+  "timeout_seconds": 30
+}
+```
+
+The helper is transport-only: it does not claim that an ELF is valid for a
+particular MCU, and it does not synthesize missing metrics.
+
 The board firmware must print the same five `index prediction` lines as the
 generated harness. Optional measurements use the `KILN_METRIC key=value`
 protocol documented in [TARGET_VALIDATION.md](../../TARGET_VALIDATION.md).

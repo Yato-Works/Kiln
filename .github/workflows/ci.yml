@@ -28,8 +28,8 @@ jobs:
 
       - name: Format and lint
         run: |
-          python -m ruff format --check kiln tests
-          python -m ruff check kiln
+          python -m ruff format --check kiln tests scripts/capture_serial.py
+          python -m ruff check kiln tests scripts/capture_serial.py
 
       - name: Type check
         run: python -m mypy kiln
