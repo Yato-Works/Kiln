@@ -41,10 +41,18 @@ add_executable(kiln_rp2040
 )
 
 target_compile_features(kiln_rp2040 PRIVATE c_std_11)
-target_compile_options(kiln_rp2040 PRIVATE -Wall -Wextra -Werror -pedantic)
 target_compile_definitions(kiln_rp2040 PRIVATE KILN_MODEL_ARENA_BYTES=${KILN_ARENA_BYTES})
 target_include_directories(kiln_rp2040 PRIVATE "${KILN_GENERATED_DIR}")
 target_link_libraries(kiln_rp2040 PRIVATE pico_stdlib hardware_timer)
+
+# Keep the strict Kiln gate on the generated model and board harness only.
+# Applying -pedantic -Werror to the SDK itself would turn unrelated, supported
+# SDK extensions into failures and would not test Kiln's generated C.
+set_source_files_properties(
+    main.c
+    ${KILN_GENERATED_SOURCES}
+    PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Werror;-pedantic"
+)
 
 # USB CDC is the default capture transport for the first reference board.
 # UART can be enabled by changing this board adapter, without changing KIR or

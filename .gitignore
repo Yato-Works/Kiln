@@ -8,6 +8,7 @@ dist/
 .venv/
 venv/
 env/
+.deps/
 
 # --- Test / type-checker caches ---
 .pytest_cache/
