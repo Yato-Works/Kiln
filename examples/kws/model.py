@@ -4,20 +4,7 @@ import os
 import torch
 import torch.nn as nn
 
-KWS_CLASSES: tuple[str, ...] = (
-    "silence",
-    "unknown",
-    "yes",
-    "no",
-    "up",
-    "down",
-    "left",
-    "right",
-    "on",
-    "off",
-    "stop",
-    "go",
-)
+from examples.kws.labels import KWS_CLASSES
 
 SAMPLE_RATE: int = 16000
 N_MELS: int = 10
@@ -149,4 +136,3 @@ def load_kws_model(
 model = load_kws_model()
 
 dummy_input = torch.zeros((N_MELS, N_FRAMES), dtype=torch.int8)
-

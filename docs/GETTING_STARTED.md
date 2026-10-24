@@ -129,6 +129,21 @@ The command is a convenience wrapper around the shipped KIR bundle and VM. It
 reports resource metrics, but the Hazard student is explicitly a compact
 certification example rather than a production security oracle.
 
+For the TinyML keyword-spotting example, the input boundary is quantized
+log-mel features rather than raw audio:
+
+```bash
+python -m kiln validate examples/kws/kws.kir.json
+python -m examples.kws.predict \
+  --input examples/kws/example_input.json --json
+python -m kiln link examples/kws/kws.kir.json --run \
+  --output build/kws-bundle-link
+```
+
+The raw PCM frontend remains a separate C integration path. This separation is
+intentional: the KIR bundle proves the classifier and target runtime, while the
+frontend proves audio feature extraction.
+
 ## 5. Choose the next path
 
 - Read [`KIR_COMPATIBILITY.md`](../KIR_COMPATIBILITY.md) before generating KIR

@@ -53,6 +53,11 @@ jobs:
             --output "$RUNNER_TEMP/kiln-hazard-bundle-link"
           python -m examples.hazard.predict \
             --text "print(eval(user_input))" --json
+          python -m kiln validate examples/kws/kws.kir.json
+          python -m examples.kws.predict \
+            --input examples/kws/example_input.json --json
+          python -m kiln link examples/kws/kws.kir.json --run \
+            --output "$RUNNER_TEMP/kiln-kws-bundle-link"
 
       - name: Phase 1 certificate (emits C, builds it with gcc, scores it)
         run: python -m examples.kws.evaluate

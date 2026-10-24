@@ -210,6 +210,32 @@ This command reports a deterministic label and VM resource metrics. The Hazard
 student is a certification and footprint demonstration, not a security oracle;
 its documented accuracy and limitations remain authoritative.
 
+### Official TinyML bundle: KWS student
+
+The shipped keyword-spotting model is also available as a portable KIR bundle:
+
+```bash
+python -m kiln validate examples/kws/kws.kir.json
+python -m kiln vm examples/kws/kws.kir.json \
+  --input examples/kws/example_input.json --json
+python -m kiln compile-kir examples/kws/kws.kir.json \
+  -o build/kws_model.c --runtime-header None
+python -m kiln link examples/kws/kws.kir.json --run \
+  --output build/kws-bundle-link
+```
+
+The example input is 490 signed int8 log-mel values (10 mel bins x 49 frames),
+not raw PCM. The torch-free wrapper is:
+
+```bash
+python -m examples.kws.predict \
+  --input examples/kws/example_input.json --json
+```
+
+The bundle is regenerated from the shipped checkpoint and validation calibration
+with `python -m examples.kws.export_bundle`. It preserves the Phase 1 certificate:
+1,992 B arena, 39,614 B KIR ROM, 314,342 MACs, and verified int32 safety.
+
 ## Phase 1 certificate (keyword spotting, shipped model)
 
 `python -m examples.kws.evaluate` reprints these numbers on any machine with `gcc`:

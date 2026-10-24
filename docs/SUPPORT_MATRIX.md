@@ -6,11 +6,11 @@ KIR v1 contract and tests, not merely accepted by a parser.
 | Area | Supported now | Evidence level | Next expansion |
 | --- | --- | --- | --- |
 | KIR | JSON KIR v1 and graph-plus-weights bundles | Frozen schema, round-trip tests, fail-closed validation | MessagePack transport preserving v1 semantics |
-| PyTorch | Supported KIR subset through `torch.fx`: embedding, Conv1d, Linear/MatMul, Add, LUT activations, MaxPool1d, Argmax | Differential and frontend diagnostics tests | Broader shape-polymorphic frontend |
+| PyTorch | Supported KIR subset through `torch.fx`: embedding, Conv1d, Linear/MatMul, Add, LUT activations, MaxPool1d, Argmax | Differential and frontend diagnostics tests; shipped KWS and Hazard bundles | Broader shape-polymorphic frontend |
 | ONNX | Not yet a public frontend | Planned interface only | ONNX-to-KIR importer with strict diagnostics |
 | TFLite | Not yet a public frontend | Planned interface only | TFLite-to-KIR importer and quantization audit |
 | C99 backend | Supported | Host compile/link, integer reference parity, static certificates | More kernels after KIR compatibility review |
-| Host target | Supported | Native linked replay; first-class KIR VM with deterministic trace and metrics | — |
+| Host target | Supported | Native linked replay; first-class KIR VM with deterministic trace and metrics; direct KIR bundle linking | — |
 | Cortex-M3 QEMU | Experimental external backend | Freestanding image, vector table, linker map, semihosting replay | CI evidence retention and broader fixtures |
 | Cortex-M0+/M4 | Cross-compile supported; RP2040 board adapter scaffold available | Compile/link inspection; physical replay still pending | Verified RP2040 evidence and additional boards |
 | RISC-V 32 | Cross-compile profile | Toolchain path and static inspection contract | Bootable emulator and board profile |
