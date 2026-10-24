@@ -1,0 +1,15 @@
+{
+  "name": "rp2040-pico-usb-example",
+  "flash": ["picotool", "load", "-f", "{exe}"],
+  "run": [
+    "python",
+    "scripts/capture_serial.py",
+    "--port",
+    "COM7",
+    "--baud",
+    "115200",
+    "--seconds",
+    "10"
+  ],
+  "timeout_seconds": 30
+}

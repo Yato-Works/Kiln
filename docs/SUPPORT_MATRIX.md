@@ -12,7 +12,7 @@ KIR v1 contract and tests, not merely accepted by a parser.
 | C99 backend | Supported | Host compile/link, integer reference parity, static certificates | More kernels after KIR compatibility review |
 | Host target | Supported | Native linked replay | — |
 | Cortex-M3 QEMU | Supported replay target | Freestanding image, vector table, linker map, semihosting replay | CI evidence retention and broader fixtures |
-| Cortex-M0+/M4 | Cross-compile supported; execution requires a runner | Compile/link inspection only until a board adapter is configured | Reference board profiles |
+| Cortex-M0+/M4 | Cross-compile supported; RP2040 board adapter scaffold available | Compile/link inspection; physical replay still pending | Verified RP2040 evidence and additional boards |
 | RISC-V 32 | Cross-compile profile | Toolchain path and static inspection contract | Bootable emulator and board profile |
 | CMake/embedded SDK | Generated C can be integrated manually | Clean generated artifacts and strict flags | First-class project templates |
 | Runtime allocation | Zero dynamic allocation in generated model | Undefined-symbol inspection | Keep as a release blocker |

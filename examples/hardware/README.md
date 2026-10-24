@@ -27,6 +27,9 @@ The board acceptance gate is:
 Until all five gates pass, the board remains Experimental and the static cycle
 estimate must not be described as a measured latency.
 
+The concrete adapter workflow is documented in
+[`rp2040/README.md`](rp2040/README.md).
+
 Copy `runner.example.json` and replace the commands with the flashing and
 capture tool used by your board. The commands must be argv arrays and must
 contain `{exe}` where the linked ELF should be passed.
