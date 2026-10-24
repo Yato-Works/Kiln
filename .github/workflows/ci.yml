@@ -93,3 +93,29 @@ jobs:
         # accuracy/budget cheque, which only needs the tracked precomputed
         # corpus and checkpoint) must pass.
         run: python -m pytest tests/ -q -rs
+
+  package:
+    # Keep packaging failures separate from the source-tree test environment.
+    # This verifies that the published wheel contains everything the CLI needs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist --wheel --outdir dist
+
+      - name: Install wheel in a fresh environment
+        run: |
+          python -m venv "$RUNNER_TEMP/kiln-wheel-env"
+          "$RUNNER_TEMP/kiln-wheel-env/bin/python" -m pip install dist/kiln-*.whl
+          "$RUNNER_TEMP/kiln-wheel-env/bin/python" -m kiln selftest --json
+          "$RUNNER_TEMP/kiln-wheel-env/bin/python" -m kiln ops
+          "$RUNNER_TEMP/kiln-wheel-env/bin/python" -c \
+            "import importlib.metadata as metadata; import kiln; assert metadata.version('kiln') == kiln.__version__"

@@ -4,20 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kiln"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Kiln: Embedded Deep Learning Compiler (Zero-malloc, bit-exact C99 generator)"
 authors = [
     { name = "Kiln Team" }
 ]
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 classifiers = [
-    "License :: OSI Approved :: MIT License",
+    "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
     "Programming Language :: C",
     "Topic :: Software Development :: Compilers",
 ]
+keywords = ["tinyml", "embedded", "machine-learning", "compiler", "microcontroller", "kir"]
 dependencies = [
     "pyyaml>=6.0",
 ]
@@ -35,12 +36,23 @@ test = [
     "torch>=2.0.0",
 ]
 dev = [
+    "build>=1.2.0",
     "ruff>=0.6.0",
     "mypy>=1.11.0",
+    "types-PyYAML>=6.0.12",
 ]
 
 [project.scripts]
 kiln = "kiln.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Yato-Works/Kiln"
+Documentation = "https://github.com/Yato-Works/Kiln#readme"
+Repository = "https://github.com/Yato-Works/Kiln"
+Issues = "https://github.com/Yato-Works/Kiln/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "kiln._version.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a focused improvement to Kiln
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who needs this and what are they trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed contract
+      description: Describe the CLI, KIR, frontend, or target behavior precisely.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and trade-offs
+      description: What would be tested or measured? What remains out of scope?
+    validations:
+      required: true
