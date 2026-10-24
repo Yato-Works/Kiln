@@ -1,7 +1,7 @@
 # Kiln Project Charter
 
 **Status:** adopted 2026-10-23  
-**Current milestone:** v0.2 foundation
+**Current milestone:** Kiln V2 foundation release
 
 ## Mission
 
@@ -35,7 +35,7 @@ guarantees it claims inside that subset.
 
 ## Milestones
 
-### v0.2 — Foundation
+### V2 — Foundation release
 
 - quality gates: formatter, linter, type checker, clean CI
 - KIR v1 schema and JSON round trip
@@ -45,7 +45,7 @@ guarantees it claims inside that subset.
 - first-class KIR v1 VM with deterministic traces and resource metrics
 - reference models and evidence remain reproducible
 
-### v0.5 — Usable preview
+### V3 — Usable expansion
 
 - PyTorch frontend documented as a stable supported subset
 - at least one external model format, prioritized by user demand
@@ -54,7 +54,7 @@ guarantees it claims inside that subset.
 - beginner, embedded, and research tutorials
 - contribution, security, release, and compatibility policies
 
-### v1.0 — Trustworthy release
+### V4 — Trustworthy ecosystem
 
 - stable KIR v1 compatibility policy
 - reproducible release artifacts

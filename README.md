@@ -1,6 +1,15 @@
-# Kiln
+# Kiln V2
 
-**Kiln aspires to be the "QEMU of TinyML": a compiler framework that turns a PyTorch
+[![CI](https://github.com/Yato-Works/Kiln/actions/workflows/ci.yml/badge.svg)](https://github.com/Yato-Works/Kiln/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Kiln V2 is the first public generation of Kiln: a board-free, reproducible
+compiler foundation for deterministic TinyML inference.
+
+Read the [V2 overview](docs/V2.md) first. It explains what is stable, what is
+experimental, and what Kiln deliberately does not claim yet.
+
+**Kiln aims to become the "QEMU of TinyML": a compiler framework that turns a PyTorch
 model into deterministic, zero-malloc, bit-exact C99 for microcontrollers, with a
 portable KIR virtual machine for development and verification.**
 It targets a seven-operation subset of a frozen IR (embedding lookup, 1-D convolution,
@@ -21,7 +30,8 @@ Re-rendered terminal frames of real runs (verbatim captured output), not screen 
 
 In one screen — **what it is**: a compiler that lowers a quantizable PyTorch graph to
 one C file with a static RAM/ROM/MAC certificate; **what is not yet**: real-silicon
-timing, on-chip audio input, residual adds in the frontend. What is guaranteed rests
+timing, a turnkey on-chip audio pipeline, and broad dynamic-shape/model-format
+coverage. What is guaranteed rests
 on three different kinds of evidence:
 
 * **checked by static analysis** — the int32 accumulators cannot overflow: the
@@ -52,12 +62,16 @@ strong as its tests.
 | **Emitted Output** | **Single standalone C99 file** | FlatBuffer blob + C++ runtime | Generated C + C runtime library | C kernel library (manual wiring) |
 | **Heap Allocation** | **Strictly ZERO** (`nm -u` shows only `abort`) | Pseudo-static (internal tensor arena) | Static workspace pool | Caller buffers |
 | **Footprint Bound** | **Exact to the byte** at compile time | Sized empirically via arena tuning | Tuner-dependent | Manual calculation |
-| **int32 Accumulator Safety** | **Mathematically proven** via static IBP | None (runtime clamp / wrap) | None | None |
+| **int32 Accumulator Safety** | **Static IBP certificate** (not formal proof) | None (runtime clamp / wrap) | None | None |
 | **External Dependencies** | **None** (zero runtime, no libc except `abort`) | C++ standard library, FlatBuffers | TVM minimal C runtime | CMSIS-Core |
 | **Target Architectures** | **Any C99 compiler** + Cortex-M/RISC-V profiles | MCU targets supported by TFLM | Platforms with TVM target config | ARM Cortex-M only |
 | **Residual Connections** | **Yes** (pure integer `ADD` with requantize) | Yes | Yes | Manual kernel call |
 
-## Status
+## V2 status
+
+V2 is the stable project generation. The KIR v1 contract, KIR VM, reference
+semantics, validation, and C99 backend form the stable center; broader frontends,
+physical boards, and SDK integrations remain experimental or planned.
 
 | Phase | Scope | State |
 | :---: | :--- | :--- |
@@ -65,8 +79,8 @@ strong as its tests.
 | 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** (raw-PCM path: 24-clip demo; log-mel features off-device) |
 | 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
 | 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (RAM/ROM/MAC Pareto front + int32 safety verification) |
-| 4 | First-class KIR VM + certified target evidence | **IN PROGRESS** (KIR VM host execution is available; QEMU and hardware are external backends) |
-| 5-6 | Moonshots, ecosystem | planned |
+| 4 | First-class KIR VM + certified target evidence | **V2 foundation** (host VM and QEMU path available; hardware remains external) |
+| 5-6 | Moonshots, ecosystem | V3/V4 expansion |
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
 [KIR.md](KIR.md) is the frozen intermediate-representation contract, with its
@@ -79,17 +93,20 @@ and [docs/SUPPORT_MATRIX.md](docs/SUPPORT_MATRIX.md) states exactly what is stab
 experimental, and planned.
 The project direction and release acceptance criteria are defined in
 [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
+For contribution and release work, see [CONTRIBUTING.md](CONTRIBUTING.md),
+[RELEASING.md](RELEASING.md), and [SECURITY.md](SECURITY.md).
 
 ## Quick start
 
 ```bash
 cd /path/to/kiln
 python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install -e ".[test]"
+python -m pip install -e .
 ```
 
-For the minimal torch-free KIR compiler, install `pip install -e .`; add
-`.[frontend]` only when exporting a PyTorch model.
+For the minimal torch-free KIR compiler, the command above is enough. Add
+`.[frontend]` only when exporting a PyTorch model, and `.[test,dev]` when
+developing Kiln.
 
 A minimal board-free workflow — no dataset download needed:
 
