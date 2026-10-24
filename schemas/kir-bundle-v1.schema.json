@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiln.dev/schemas/kir-bundle-v1.schema.json",
+  "title": "Kiln portable KIR bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "graph", "weights"],
+  "properties": {
+    "schema": {"const": "kiln.kir.bundle"},
+    "version": {"const": 1},
+    "graph": {"$ref": "kir-v1.schema.json"},
+    "weights": {"type": "object"}
+  }
+}

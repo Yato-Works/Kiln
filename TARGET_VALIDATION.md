@@ -28,6 +28,12 @@ invent a cycle count.
 
 ## Hardware runner contract
 
+The first reference-board adapter is planned for the Raspberry Pi Pico
+(RP2040), using the existing `cortex-m0plus` architecture family. The adapter
+must supply the vendor startup/linker image, a real flash transport, a reset
+and output transport, and firmware-side cycle/RAM measurements. A generic
+cross-compiled ELF is not accepted as board evidence merely because it links.
+
 Hardware is deliberately configured outside the compiler. A runner document is
 JSON with argv arrays, never a shell command:
 

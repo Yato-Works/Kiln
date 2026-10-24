@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kiln.dev/schemas/kir-v1.schema.json",
+  "title": "Kiln Intermediate Representation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "inputs", "outputs", "tensors", "nodes"],
+  "properties": {
+    "schema": {"const": "kiln.kir"},
+    "version": {"const": 1},
+    "inputs": {"type": "array", "items": {"type": "string"}},
+    "outputs": {"type": "array", "items": {"type": "string"}},
+    "tensors": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/tensor"}
+    },
+    "nodes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/node"}
+    }
+  },
+  "$defs": {
+    "quant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["multiplier", "shift"],
+      "properties": {
+        "multiplier": {"type": "integer", "minimum": 1073741824, "maximum": 2147483647},
+        "shift": {"type": "integer", "minimum": 0, "maximum": 31}
+      }
+    },
+    "tensor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "shape", "dtype", "quant"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "shape": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "dtype": {"enum": ["uint8", "int8", "int32"]},
+        "quant": {"anyOf": [{"$ref": "#/$defs/quant"}, {"type": "null"}]}
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "op", "inputs", "outputs", "attrs"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "op": {"enum": ["embedding", "conv1d", "matmul", "add", "lut", "maxpool1d", "argmax"]},
+        "inputs": {"type": "array", "items": {"type": "string"}},
+        "outputs": {"type": "array", "items": {"type": "string"}},
+        "attrs": {"type": "object"}
+      }
+    }
+  }
+}

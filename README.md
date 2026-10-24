@@ -68,9 +68,14 @@ strong as its tests.
 | 5-6 | Moonshots, ecosystem | planned |
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
-[KIR.md](KIR.md) is the frozen intermediate-representation contract.
+[KIR.md](KIR.md) is the frozen intermediate-representation contract, with its
+[KIR v1 compatibility policy](KIR_COMPATIBILITY.md) and machine-readable schemas
+under [`schemas/`](schemas/).
 [TARGET_VALIDATION.md](TARGET_VALIDATION.md) defines the difference between host,
 QEMU, and hardware evidence and the reproducible hardware-runner contract.
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) is the clean-checkout tutorial,
+and [docs/SUPPORT_MATRIX.md](docs/SUPPORT_MATRIX.md) states exactly what is stable,
+experimental, and planned.
 The project direction and release acceptance criteria are defined in
 [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 
@@ -81,6 +86,9 @@ cd /path/to/kiln
 python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[test]"
 ```
+
+For the minimal torch-free KIR compiler, install `pip install -e .`; add
+`.[frontend]` only when exporting a PyTorch model.
 
 Three commands — no dataset download needed:
 

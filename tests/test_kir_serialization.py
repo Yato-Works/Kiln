@@ -42,3 +42,25 @@ def test_kir_v1_rejects_unknown_version() -> None:
         assert "unsupported KIR schema" in str(error)
     else:
         raise AssertionError("unknown KIR version was accepted")
+
+
+def test_kir_v1_rejects_unknown_fields() -> None:
+    document = graph_to_dict(_graph())
+    document["unexpected"] = True
+    try:
+        graph_from_dict(document)
+    except ValueError as error:
+        assert "unknown unexpected" in str(error)
+    else:
+        raise AssertionError("unknown KIR fields were accepted")
+
+
+def test_kir_v1_rejects_non_integer_quantization_fields() -> None:
+    document = graph_to_dict(_graph())
+    document["tensors"][2]["quant"]["shift"] = 1.5
+    try:
+        graph_from_dict(document)
+    except TypeError as error:
+        assert "must be an integer" in str(error)
+    else:
+        raise AssertionError("non-integer KIR quantization was accepted")

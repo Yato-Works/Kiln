@@ -1,6 +1,6 @@
 ﻿# Kiln Intermediate Representation (KIR) Specification
 
-**Status**: Tier 0 / Phase 0 Frozen  
+**Status**: KIR v1 Frozen / compatibility policy in `KIR_COMPATIBILITY.md`
 **Target Environment**: Bare-metal MCUs / Embedded Systems (Cortex-M0+/M3/M4/M7, RISC-V, POSIX)  
 **Compiler Contract**: Strictly Zero-malloc, Deterministic C99 Output, Bit-exact Differential Parity
 
