@@ -1,13 +1,14 @@
 # Kiln
 
 **Kiln aspires to be the "QEMU of TinyML": a compiler framework that turns a PyTorch
-model into deterministic, zero-malloc, bit-exact C99 for microcontrollers.**
+model into deterministic, zero-malloc, bit-exact C99 for microcontrollers, with a
+portable KIR virtual machine for development and verification.**
 It targets a seven-operation subset of a frozen IR (embedding lookup, 1-D convolution,
 matmul, add, LUT, max-pool, argmax) — enough for the two reference models below,
 nothing more.
 
 The emitted translation unit is a single `kiln_predict(const uint8_t *input, int32_t length)`
-function plus static tables — no runtime, no interpreter, no `malloc`; the only libc
+function plus static tables — no runtime and no `malloc`; the only libc
 symbol the model object references is `abort()` (the contract-violation trap). Arena
 and ROM footprints are known before you flash, and the generated C is bit-identical to
 an independent Python *integer* reference (`kiln.ref`); against the FP32 PyTorch model
@@ -64,7 +65,7 @@ strong as its tests.
 | 1 | Backend validation: MLPerf-Tiny KWS — int8, raw PCM → label, all in C | **DONE** (raw-PCM path: 24-clip demo; log-mel features off-device) |
 | 2 | Synthetic-data distillation pipeline (teacher LLM → int8 student) | **DONE** (M2.0–M2.4) |
 | 3 | Declarative `kiln.yaml` → `kiln build` → compile-time architecture search | **DONE** (RAM/ROM/MAC Pareto front + int32 safety verification) |
-| 4 | Certified trust: `kiln link` (strict host/Cortex-M compile + link + image measurement + system-emulator replay) | **IN PROGRESS** (M4.1–M4.2 complete; Cortex-M3/QEMU replay is the current acceptance path; hardware is next) |
+| 4 | First-class KIR VM + certified target evidence | **IN PROGRESS** (KIR VM host execution is available; QEMU and hardware are external backends) |
 | 5-6 | Moonshots, ecosystem | planned |
 
 [ROADMAP.md](ROADMAP.md) holds the phase goals, the Phase 1 close-out and the known gaps;
@@ -124,6 +125,7 @@ A task is a YAML spec, and the budget gate is part of the build:
 ```bash
 python -m kiln build examples/hazard/kiln.yaml            # kiln.yaml -> model.c + budget_certificate.txt
 python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front (hazard only)
+python -m kiln vm model.kir.json --json --trace         # execute a portable KIR v1 bundle
 python -m kiln link examples/hazard/kiln.yaml --run       # strict compile + link + image measurement + replay
 python -m kiln link examples/hazard/kiln.yaml --target cortex-m3-qemu --run  # freestanding Cortex-M3/QEMU replay
 python -m kiln link examples/hazard/kiln.yaml --target cortex-m4 --runner-config examples/hardware/runner.example.json --run  # board runner
@@ -146,7 +148,13 @@ student.
 > Its feasibility verdict enforces both static memory budgets and mathematical int32
 > accumulator safety, guaranteeing that candidates on the frontier never trigger overflow.
 
-`kiln link` closes that loop on a **real binary** (Phase 4): it compiles `model.c`,
+`kiln vm` closes the frontend-to-execution loop without a board: it loads the
+versioned KIR bundle directly, executes the seven KIR instructions, and reports
+outputs, a deterministic instruction trace, a documented cycle model, arena/ROM
+usage, zero guest dynamic allocations, and the static int32 safety result. Its cycle count
+is a reproducible virtual-target estimate, not silicon latency.
+
+`kiln link` closes the same loop on a **real binary** (Phase 4): it compiles `model.c`,
 the declared frontend and a generated replay harness with
 `-std=c99 -O3 -Wall -Wextra -Werror -pedantic`, links an executable, and reports
 what the image actually costs -- `.bss` against the audited arena, read-only data
@@ -256,6 +264,7 @@ kiln/ref/        independent integer reference interpreter (the oracle)
 kiln/spec/       declarative kiln.yaml schema + model/graph resolution
 kiln/search/     compile-time footprint search: grid enumeration, Pareto front, report
 kiln/link/       strict compile + link, image measurement (sections/symbols) and replay harness
+kiln/vm/         deterministic KIR v1 host virtual machine and instruction trace
 kiln/cli.py      `compile`, `build`, `search`, `link`, `audit`, `verify`, `ops`
 examples/kws/    Phase 1: model, training recipes, evaluation, fixed-point C frontend
 examples/hazard/ Phase 2: M2.0 fixed-point feature contract + token-bag graph
@@ -290,12 +299,25 @@ reproducing KIR outside the Python frontend.
 Use `kiln validate model.kir.json` in CI as a fail-closed safety gate, or
 `kiln inspect model.kir.json --json` to feed graph and resource information into
 other tooling.
+
+The same bundle can be executed without PyTorch:
+
+```bash
+python -m kiln vm model.kir.json --json --trace
+```
+
+The VM is the recommended default target for students and researchers who do not
+own a development board. See [docs/VM.md](docs/VM.md) for the execution contract,
+metrics, and the path to QEMU/Renode/physical backends.
 * Not guaranteed (yet): execution on real silicon. `kiln link` can compile and
   measure host, ARM Cortex-M0+/M4 and RISC-V target images; the dedicated
   `cortex-m3-qemu` profile boots a freestanding image in QEMU system emulation,
   while bare-metal profiles intentionally refuse `--run` without a truthful
   runner. The latency figure remains an upper-bound cycle estimate, and
   bit-identical *training* runs are not guaranteed.
+* The KIR VM is a virtual target. Its cycle model is intentionally portable and
+  deterministic; it must not be presented as a measurement for RP2040, QEMU, or
+  any other physical CPU.
 * The PyTorch frontend lowers sequential and residual graphs (including skip connections
   `a + b` via torch.fx) to KIR's `ADD` node with certified int32 accumulator safety.
 

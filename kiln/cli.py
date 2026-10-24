@@ -28,6 +28,7 @@ from .search.report import format_search_report, search_results_csv
 from .spec import load_spec, resolve_model_graph
 from .spec.pipeline import SafetyViolationError, emit_spec_artifacts
 from .link.toolchain import TARGET_PROFILES
+from .vm import VMError, VirtualMachine
 
 
 def _export_model_to_kir(model: Any, dummy_input: Any) -> tuple[Any, dict[str, Any]]:
@@ -785,6 +786,72 @@ int main(void) {{
         return 1
 
 
+def cmd_vm(args: argparse.Namespace) -> int:
+    """Execute a portable KIR v1 bundle on the deterministic host VM."""
+    try:
+        vm = VirtualMachine.from_bundle(args.bundle, alignment=args.alignment)
+        if args.input is None:
+            inputs = {name: [0] * vm.graph.tensors[name].num_elements for name in vm.graph.inputs}
+        else:
+            raw = json.loads(
+                sys.stdin.read()
+                if args.input == "-"
+                else Path(args.input).read_text(encoding="utf-8")
+            )
+            if isinstance(raw, dict):
+                inputs = raw
+            elif len(vm.graph.inputs) == 1:
+                inputs = {vm.graph.inputs[0]: raw}
+            else:
+                raise VMError("multi-input bundles require a JSON object keyed by input name")
+        result = vm.run(inputs)
+    except (OSError, KeyError, json.JSONDecodeError, TypeError, ValueError, VMError) as exc:
+        print(
+            _color(f"[ERROR] VM execution failed: {exc}", Style.BOLD + Style.RED), file=sys.stderr
+        )
+        return 1
+
+    payload: dict[str, Any] = {
+        "outputs": result.outputs,
+        "metrics": {
+            "cycles": result.metrics.cycles,
+            "static_cycle_upper_bound": result.metrics.static_cycle_upper_bound,
+            "instructions": result.metrics.instructions,
+            "arena_bytes": result.metrics.arena_bytes,
+            "peak_concurrent_bytes": result.metrics.peak_concurrent_bytes,
+            "rom_bytes": result.metrics.rom_bytes,
+            "allocation_bytes": result.metrics.allocation_bytes,
+            "int32_overflow_free": result.metrics.int32_overflow_free,
+        },
+    }
+    if args.trace:
+        payload["trace"] = [
+            {
+                "node": event.node,
+                "op": event.op,
+                "inputs": event.inputs,
+                "outputs": event.outputs,
+                "cycles": event.cycles,
+            }
+            for event in result.trace
+        ]
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(f"KIR VM: {args.bundle}")
+        print(f"outputs       : {result.outputs}")
+        print(f"cycles        : {result.metrics.cycles}")
+        print(f"instructions  : {result.metrics.instructions}")
+        print(f"arena         : {result.metrics.arena_bytes} bytes")
+        print(f"ROM           : {result.metrics.rom_bytes} bytes")
+        print(f"guest allocs  : {result.metrics.allocation_bytes} bytes")
+        print(f"int32 safety  : {'SAFE' if result.metrics.int32_overflow_free else 'UNVERIFIED'}")
+        if args.trace:
+            for event in result.trace:
+                print(f"  {event.node:<20} {event.op:<10} {event.cycles:>8} cycles")
+    return 0
+
+
 def cmd_ops(_args: argparse.Namespace) -> int:
     header = f"{'Op Type':<12} | {'Category':<14} | {'Description'}"
     divider = "-" * len(header)
@@ -1019,6 +1086,20 @@ def create_parser() -> argparse.ArgumentParser:
     )
     p_verify.add_argument("--gcc", default=None, help="Custom path to GCC compiler executable")
 
+    # vm (portable KIR v1 host target)
+    p_vm = subparsers.add_parser(
+        "vm", help="Execute a KIR v1 bundle on the deterministic host virtual machine"
+    )
+    p_vm.add_argument("bundle", help="Path to a KIR v1 JSON bundle")
+    p_vm.add_argument(
+        "--input",
+        default=None,
+        help="JSON input file, '-' for stdin; omitted inputs are deterministic zeros",
+    )
+    p_vm.add_argument("--alignment", type=int, default=4, help="Arena alignment in bytes")
+    p_vm.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    p_vm.add_argument("--trace", action="store_true", help="Include one event per KIR node")
+
     # ops
     subparsers.add_parser("ops", help="List supported Kiln IR operations")
 
@@ -1052,6 +1133,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_audit(args)
     elif args.command == "verify":
         return cmd_verify(args)
+    elif args.command == "vm":
+        return cmd_vm(args)
     elif args.command == "ops":
         return cmd_ops(args)
     elif args.command == "doctor":

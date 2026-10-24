@@ -1,6 +1,8 @@
 ﻿# Kiln Architectural Roadmap: From Core to Universal Micro-Compiler
 
-**Goal**: Build the "QEMU of TinyML" — an open, zero-malloc, bit-exact compiler framework that allows anyone to forge deterministic, specialized C99 inference engines from a simple task specification (`kiln.yaml`).
+**Goal**: Build the "QEMU of TinyML" — an open, zero-malloc, bit-exact compiler
+framework with a board-free KIR virtual target and external QEMU/Renode/hardware
+backends.
 
 The adopted product direction, target users, non-negotiable guarantees, and
 release acceptance criteria live in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
@@ -15,7 +17,7 @@ release acceptance criteria live in [PROJECT_CHARTER.md](PROJECT_CHARTER.md).
 | **1** | **バックエンド単体の実証 (Backend Validation)** | 量子化・C生成・予算証明書の実効性証明 | MLPerf Tiny KWS (Speech Commands v2, 12クラス, 38,590 params, 91.01%) + PCM→C E2E parity | **DONE** |
 | **2** | **データ生成パイプラインの実証 (Data Synthesis)** | 教師LLM合成データ→蒸留の実効性証明 | Python危険API検知タスク、メタプロンプト生成、差分ファジング蒸留、fastText対決 | DONE (M2.5 open) |
 | **3** | **一般化 (The "QEMU Moment")** | 任意タスクを宣言的仕様から自動導出 | `kiln.yaml` + `kiln build` (予算ゲート)、コンパイル時アーキテクチャ探索 `kiln search` (RAM/ROM/容量パレート) 完了; 自動タスク振り分けは未着手 | IN PROGRESS |
-| **4** | **信頼レイヤー (Certified Trust)** | 組み込み運用に耐えうる実証的保証 | `kiln link` の厳格コンパイル + リンク + イメージ計測、区間境界伝播 M4.2、Cortex-M3/QEMU replay、hardware-runner契約 + serial captureを実装; RP2040のstartup/SDK/実機ファーム検証は未完了 | IN PROGRESS |
+| **4** | **信頼レイヤー (Certified Trust)** | KIRを仮想・外部ターゲットで再現可能に実行 | KIR v1 VM、決定論的trace、arena/ROM/cycle/safety metrics; QEMU/Renode/実機は外部バックエンド | IN PROGRESS |
 | **5** | **ムーンショット (Moonshots)** | 核を汚さない実験ブランチでの賭け | 論理ゲート網バックエンド、CBMC/Frama-C 形式検証、決定木/DNF 抽出、オンデバイス整数SGD | EXPERIMENTAL |
 | **6** | **公開・エコシステム (Ecosystem)** | 研究者・エンジニアに愛されるOSS化 | KIR v1仕様書先出し、clean-checkout tutorial、support matrix、再現可能ビルド、実機クロス検証、3コマンドのHello World | IN PROGRESS (foundation) |
 

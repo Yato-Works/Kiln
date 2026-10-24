@@ -6,8 +6,8 @@
 ## Mission
 
 Kiln is an open compiler foundation that turns quantized models into tiny,
-deterministic, zero-malloc inference programs whose resource usage and integer
-safety can be inspected and independently reproduced.
+deterministic, zero-malloc inference programs—and portable KIR VM executions—
+whose resource usage and integer safety can be inspected and independently reproduced.
 
 The primary audiences are embedded engineers, students, and researchers.
 
@@ -30,6 +30,8 @@ guarantees it claims inside that subset.
 6. Readable, inspectable generated C and versioned KIR.
 7. Reproducible tests and documented evidence rather than marketing claims.
 8. A learning path that exposes compiler, quantization, and verification ideas.
+9. The KIR VM is a first-class board-free target; physical boards are optional
+   external backends, never a prerequisite for learning or development.
 
 ## Milestones
 
@@ -40,6 +42,7 @@ guarantees it claims inside that subset.
 - strict frontend diagnostics
 - explicit quantization policy and calibration API
 - CLI environment diagnostics
+- first-class KIR v1 VM with deterministic traces and resource metrics
 - reference models and evidence remain reproducible
 
 ### v0.5 — Usable preview

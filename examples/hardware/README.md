@@ -2,6 +2,10 @@
 
 ## Reference board direction
 
+Hardware is an optional external target. Kiln's default development target is
+the board-free [KIR VM](../../docs/VM.md), so nobody needs to purchase an
+RP2040—or any other microcontroller—to build, execute, and inspect a KIR bundle.
+
 Kiln's first board-level reference target is the **Raspberry Pi Pico
 (RP2040)**. It is inexpensive, widely available to students, and uses the
 Cortex-M0+ class already represented by the `cortex-m0plus` cross-compile
@@ -26,6 +30,11 @@ The board acceptance gate is:
 
 Until all five gates pass, the board remains Experimental and the static cycle
 estimate must not be described as a measured latency.
+
+If you are the wonderfully brave person who owns an RP2040 or another supported
+board, your real-hardware replay would be an extremely valuable contribution to
+Kiln. Please open an issue or pull request with the reproducible evidence rather
+than treating a local board run as a claim about all hardware.
 
 The concrete adapter workflow is documented in
 [`rp2040/README.md`](rp2040/README.md).

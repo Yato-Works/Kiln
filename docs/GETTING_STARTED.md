@@ -51,11 +51,16 @@ python -m kiln export-kir examples/kws/model.py -o /tmp/kws.kir.json
 python -m kiln validate /tmp/kws.kir.json
 python -m kiln inspect /tmp/kws.kir.json --json
 python -m kiln compile-kir /tmp/kws.kir.json -o /tmp/kws_model.c --runtime-header None
+python -m kiln vm /tmp/kws.kir.json --json --trace
 ```
 
 The last command does not import PyTorch. This is the recommended boundary for
 language-independent tooling: frontend authors produce KIR, while compiler and
 verification tooling consumes KIR.
+
+The VM command also consumes only the bundle. It is the recommended path when
+you do not have a board; its cycle count is a deterministic virtual-target model,
+not a physical latency measurement. See [`docs/VM.md`](VM.md).
 
 ## 4. Run the deterministic checks
 
