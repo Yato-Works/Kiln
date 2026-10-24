@@ -18,6 +18,7 @@ import random
 from pathlib import Path
 from typing import Any, Final
 
+from examples.hazard.labels import HAZARD_CLASSES
 from examples.hazard.tokenizer import TOKEN_COUNT, VOCAB_SIZE
 from kiln.frontend.pytorch import compute_multiplier_and_shift
 from kiln.ir.kir import DType, Graph, Node, OpType, QuantParam, TensorDesc
@@ -35,16 +36,6 @@ __all__ = (
 
 #: Embedding width of the M2.0 contract: 96 tokens x (8 + 6) = 1,344 B of arena.
 DEFAULT_DIM: Final = 8
-
-#: Frozen Phase 2 6-class security taxonomy (M2.0 / ROADMAP Open Question 2).
-HAZARD_CLASSES: Final[tuple[str, ...]] = (
-    "benign",             # 0: standard safe code
-    "dynamic_exec",       # 1: eval, exec, compile, __import__
-    "deserialization",    # 2: pickle, marshal, unsafe yaml loader
-    "shell_injection",    # 3: os.system, subprocess with shell=True
-    "tempfile",           # 4: tempfile.mktemp, predictable temporary paths
-    "unsafe_validation",  # 5: assert-based access control / security validation
-)
 
 #: Label count of the frozen hazard taxonomy.
 DEFAULT_LABELS: Final = len(HAZARD_CLASSES)
@@ -137,12 +128,20 @@ def build_bag_graph(
     tensors = {
         "tokens": TensorDesc("tokens", shape=(tokens,), dtype=DType.UINT8),
         "emb": TensorDesc("emb", shape=(tokens, dim), dtype=DType.INT8),
-        "logits": TensorDesc("logits", shape=(tokens, labels), dtype=DType.INT8, quant=label_quant(label_scale)),
+        "logits": TensorDesc(
+            "logits", shape=(tokens, labels), dtype=DType.INT8, quant=label_quant(label_scale)
+        ),
         "pooled": TensorDesc("pooled", shape=(1, labels), dtype=DType.INT8),
         "label": TensorDesc("label", shape=(), dtype=DType.INT8),
     }
     nodes = [
-        Node(OpType.EMBEDDING, "op_emb", inputs=["tokens"], outputs=["emb"], attrs={"weight": "w_emb"}),
+        Node(
+            OpType.EMBEDDING,
+            "op_emb",
+            inputs=["tokens"],
+            outputs=["emb"],
+            attrs={"weight": "w_emb"},
+        ),
         Node(OpType.MATMUL, "op_mm", inputs=["emb"], outputs=["logits"], attrs={"weight": "w_mm"}),
         Node(
             OpType.MAXPOOL1D,

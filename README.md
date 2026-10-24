@@ -198,6 +198,18 @@ The bundle is regenerated from the checked-in student weights with
 is already tokenized according to the Hazard frontend contract; it is data only
 and is never executed as code.
 
+For raw source text, use the example's torch-free frontend wrapper:
+
+```bash
+python -m examples.hazard.predict \
+  --text "print(eval(user_input))" --json
+Get-Content snippet.py | python -m examples.hazard.predict --stdin
+```
+
+This command reports a deterministic label and VM resource metrics. The Hazard
+student is a certification and footprint demonstration, not a security oracle;
+its documented accuracy and limitations remain authoritative.
+
 ## Phase 1 certificate (keyword spotting, shipped model)
 
 `python -m examples.kws.evaluate` reprints these numbers on any machine with `gcc`:

@@ -118,6 +118,17 @@ The bundle is already tokenized input-to-output KIR. The original tokenizer and
 the C frontend remain available for end-to-end text integration, while this
 path lets a user study the compiler and target behavior independently.
 
+To classify raw text with the same tokenizer contract:
+
+```bash
+python -m examples.hazard.predict \
+  --text "print(eval(user_input))" --json
+```
+
+The command is a convenience wrapper around the shipped KIR bundle and VM. It
+reports resource metrics, but the Hazard student is explicitly a compact
+certification example rather than a production security oracle.
+
 ## 5. Choose the next path
 
 - Read [`KIR_COMPATIBILITY.md`](../KIR_COMPATIBILITY.md) before generating KIR

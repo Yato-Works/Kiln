@@ -51,6 +51,8 @@ jobs:
             --input examples/hazard/data/example_tokens.json --json
           python -m kiln link examples/hazard/hazard.kir.json --run \
             --output "$RUNNER_TEMP/kiln-hazard-bundle-link"
+          python -m examples.hazard.predict \
+            --text "print(eval(user_input))" --json
 
       - name: Phase 1 certificate (emits C, builds it with gcc, scores it)
         run: python -m examples.kws.evaluate
