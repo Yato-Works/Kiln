@@ -177,6 +177,27 @@ does not import PyTorch or resolve a Python model factory. It uses the conservat
 default resource envelope (2 KiB arena / 40 KiB ROM) because a standalone KIR
 bundle carries graph semantics, not application-specific deployment budgets.
 
+### Official practical bundle: Hazard student
+
+The repository ships a frozen, portable KIR bundle for the Phase 2 Hazard
+student. The consumer path requires no PyTorch:
+
+```bash
+python -m kiln validate examples/hazard/hazard.kir.json
+python -m kiln vm examples/hazard/hazard.kir.json \
+  --input examples/hazard/data/example_tokens.json --json --trace
+python -m kiln compile-kir examples/hazard/hazard.kir.json \
+  -o build/hazard_model.c --runtime-header None
+python -m kiln link examples/hazard/hazard.kir.json --run \
+  --output build/hazard-bundle-link
+```
+
+The bundle is regenerated from the checked-in student weights with
+`python -m examples.hazard.export_bundle`. Its graph is statically verified at
+1,344 B arena, 2,096 B KIR ROM, and int32-safe accumulation. The input fixture
+is already tokenized according to the Hazard frontend contract; it is data only
+and is never executed as code.
+
 ## Phase 1 certificate (keyword spotting, shipped model)
 
 `python -m examples.kws.evaluate` reprints these numbers on any machine with `gcc`:

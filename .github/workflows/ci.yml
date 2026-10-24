@@ -46,6 +46,11 @@ jobs:
             -o "$RUNNER_TEMP/kiln-tutorial.c" --runtime-header None
           python -m kiln link examples/vm/hello.kir.json --run \
             --output "$RUNNER_TEMP/kiln-tutorial-link"
+          python -m kiln validate examples/hazard/hazard.kir.json
+          python -m kiln vm examples/hazard/hazard.kir.json \
+            --input examples/hazard/data/example_tokens.json --json
+          python -m kiln link examples/hazard/hazard.kir.json --run \
+            --output "$RUNNER_TEMP/kiln-hazard-bundle-link"
 
       - name: Phase 1 certificate (emits C, builds it with gcc, scores it)
         run: python -m examples.kws.evaluate

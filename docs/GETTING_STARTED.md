@@ -104,6 +104,20 @@ requirements for learning the KIR contract or running a model. The final two
 commands add the standalone C99 artifact and a strict linked-image replay; the
 link command consumes KIR directly and does not need the PyTorch frontend.
 
+For a practical shipped model, repeat the same path with the Hazard student:
+
+```bash
+python -m kiln validate examples/hazard/hazard.kir.json
+python -m kiln vm examples/hazard/hazard.kir.json \
+  --input examples/hazard/data/example_tokens.json --json
+python -m kiln link examples/hazard/hazard.kir.json --run \
+  --output build/hazard-bundle-link
+```
+
+The bundle is already tokenized input-to-output KIR. The original tokenizer and
+the C frontend remain available for end-to-end text integration, while this
+path lets a user study the compiler and target behavior independently.
+
 ## 5. Choose the next path
 
 - Read [`KIR_COMPATIBILITY.md`](../KIR_COMPATIBILITY.md) before generating KIR
