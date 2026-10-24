@@ -27,8 +27,11 @@ from pathlib import Path
 from typing import Mapping
 
 from ..budget.report import BudgetReport
+from ..ir.serialization import loads_bundle
 from ..spec import KilnSpec, resolve_model_graph
 from ..spec.pipeline import emit_spec_artifacts
+from ..spec.loader import LoadedModel
+from ..spec.schema import BudgetSpec, InputSpec, ModelSpec, OutputSpec
 from . import harness as harness_module
 from .toolchain import (
     MALLOC_SYMBOLS,
@@ -50,7 +53,7 @@ from .runner import (
     parse_runtime_metrics,
 )
 
-__all__ = ("LinkOutcome", "link_spec")
+__all__ = ("LinkOutcome", "bundle_spec", "link_bundle", "link_spec")
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +125,32 @@ def _executable_path(out_dir: Path, spec_name: str) -> Path:
     return out_dir / f"{spec_name}_link{suffix}"
 
 
-def link_spec(
+def bundle_spec(bundle: Path) -> KilnSpec:
+    """Create the conservative declarative envelope for a KIR bundle.
+
+    A bundle carries graph semantics but intentionally does not carry a product
+    budget. Direct bundle linking therefore uses the same default envelope as a
+    minimal ``kiln.yaml`` and labels the artifact as a bundle-derived build.
+    """
+    graph, _weights = loads_bundle(bundle.read_text(encoding="utf-8"))
+    input_desc = graph.tensors[graph.inputs[0]]
+    output_desc = graph.tensors[graph.outputs[0]]
+    return KilnSpec(
+        name=bundle.name.removesuffix(".kir.json"),
+        version=1,
+        task="bundle",
+        domain="general",
+        input=InputSpec(input_desc.name, tuple(input_desc.shape), input_desc.dtype.value),
+        output=OutputSpec(output_desc.name, (), output_desc.dtype.value),
+        model=ModelSpec(entry_point="bundle"),
+        budget=BudgetSpec(),
+        base_dir=bundle.parent.resolve(),
+    )
+
+
+def _link_loaded(
     spec: KilnSpec,
+    loaded: LoadedModel,
     *,
     out_dir: Path | None = None,
     cc: str | None = None,
@@ -133,12 +160,11 @@ def link_spec(
     run: bool = False,
     runner_config: Path | None = None,
 ) -> LinkOutcome:
-    """Compiles, links and (optionally) executes one declarative spec.
+    """Compiles, links and (optionally) executes one resolved graph.
 
     ``runtime_header`` defaults to ``None``: the self-contained translation unit
     is the one that can be linked without shipping a project's own shim.
     """
-    loaded = resolve_model_graph(spec)
     target = Path(out_dir) if out_dir else spec.base_dir / "link"
     emitted = emit_spec_artifacts(
         spec, loaded, target, alignment=alignment, runtime_header=runtime_header
@@ -217,4 +243,56 @@ def link_spec(
         execution_evidence=execution_evidence,
         runtime_metrics=runtime_metrics,
         symbols_inspected=model_undefined is not None,
+    )
+
+
+def link_spec(
+    spec: KilnSpec,
+    *,
+    out_dir: Path | None = None,
+    cc: str | None = None,
+    target_profile: str = "host",
+    alignment: int = 4,
+    runtime_header: str | None = None,
+    run: bool = False,
+    runner_config: Path | None = None,
+) -> LinkOutcome:
+    """Compile, link and (optionally) execute one declarative spec."""
+    return _link_loaded(
+        spec,
+        resolve_model_graph(spec),
+        out_dir=out_dir,
+        cc=cc,
+        target_profile=target_profile,
+        alignment=alignment,
+        runtime_header=runtime_header,
+        run=run,
+        runner_config=runner_config,
+    )
+
+
+def link_bundle(
+    bundle: Path,
+    *,
+    out_dir: Path | None = None,
+    cc: str | None = None,
+    target_profile: str = "host",
+    alignment: int = 4,
+    runtime_header: str | None = None,
+    run: bool = False,
+    runner_config: Path | None = None,
+) -> LinkOutcome:
+    """Compile, link and (optionally) execute a portable KIR v1 bundle."""
+    graph, weights = loads_bundle(bundle.read_text(encoding="utf-8"))
+    spec = bundle_spec(bundle)
+    return _link_loaded(
+        spec,
+        LoadedModel(graph, weights, spec),
+        out_dir=out_dir,
+        cc=cc,
+        target_profile=target_profile,
+        alignment=alignment,
+        runtime_header=runtime_header,
+        run=run,
+        runner_config=runner_config,
     )

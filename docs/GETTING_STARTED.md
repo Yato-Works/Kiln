@@ -92,11 +92,17 @@ python -m kiln selftest
 python -m kiln validate examples/vm/hello.kir.json
 python -m kiln vm examples/vm/hello.kir.json \
   --input examples/vm/input.json --json --trace
+python -m kiln compile-kir examples/vm/hello.kir.json \
+  -o build/tutorial_model.c --runtime-header None
+python -m kiln link examples/vm/hello.kir.json --run \
+  --output build/tutorial-link
 ```
 
 This path is intentionally the first success criterion for students and
 researchers. PyTorch export and native linking are separate capabilities, not
-requirements for learning the KIR contract or running a model.
+requirements for learning the KIR contract or running a model. The final two
+commands add the standalone C99 artifact and a strict linked-image replay; the
+link command consumes KIR directly and does not need the PyTorch frontend.
 
 ## 5. Choose the next path
 

@@ -40,6 +40,12 @@ jobs:
           python -m kiln --help
           python -m kiln selftest --json
           python -m kiln doctor --json
+          python -m kiln validate examples/vm/hello.kir.json
+          python -m kiln vm examples/vm/hello.kir.json --input examples/vm/input.json --json
+          python -m kiln compile-kir examples/vm/hello.kir.json \
+            -o "$RUNNER_TEMP/kiln-tutorial.c" --runtime-header None
+          python -m kiln link examples/vm/hello.kir.json --run \
+            --output "$RUNNER_TEMP/kiln-tutorial-link"
 
       - name: Phase 1 certificate (emits C, builds it with gcc, scores it)
         run: python -m examples.kws.evaluate

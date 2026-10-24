@@ -18,9 +18,11 @@ from .ir.serialization import dumps_bundle, loads_bundle
 from .ref.ref import run_ref
 from .link import (
     ToolchainError,
+    bundle_spec,
     budget_violations,
     format_execution_certificate,
     format_link_report,
+    link_bundle,
     link_spec,
 )
 from .search import SearchRow, run_search
@@ -483,25 +485,30 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 def cmd_link(args: argparse.Namespace) -> int:
-    """Phase 4: compile + link the spec's C artifacts, measure the image, replay it."""
+    """Phase 4: compile + link a spec or portable KIR bundle, then replay it."""
     try:
         if args.runner_config and not args.run:
             raise ToolchainError("--runner-config requires --run")
-        task = load_spec(args.spec)
         runtime_header = args.runtime_header
         if runtime_header is not None and runtime_header.strip().lower() in ("", "none"):
             runtime_header = None
         target_profile = getattr(args, "target", "host")
-        outcome = link_spec(
-            task,
-            out_dir=Path(args.output) if args.output else None,
-            cc=args.cc,
-            target_profile=target_profile,
-            alignment=args.alignment,
-            runtime_header=runtime_header,
-            run=args.run,
-            runner_config=Path(args.runner_config) if args.runner_config else None,
-        )
+        source_path = Path(args.spec)
+        link_kwargs = {
+            "out_dir": Path(args.output) if args.output else None,
+            "cc": args.cc,
+            "target_profile": target_profile,
+            "alignment": args.alignment,
+            "runtime_header": runtime_header,
+            "run": args.run,
+            "runner_config": Path(args.runner_config) if args.runner_config else None,
+        }
+        if source_path.name.endswith(".kir.json"):
+            task = bundle_spec(source_path)
+            outcome = link_bundle(source_path, **link_kwargs)
+        else:
+            task = load_spec(source_path)
+            outcome = link_spec(task, **link_kwargs)
     except ToolchainError as e:
         print(_color(f"[ERROR] Link failed: {e}", Style.BOLD + Style.RED), file=sys.stderr)
         return 1
@@ -1127,9 +1134,11 @@ def create_parser() -> argparse.ArgumentParser:
     # link (Phase 4: compile + link + measure + replay the emitted C)
     p_link = subparsers.add_parser(
         "link",
-        help="Compile and link a kiln.yaml build under strict flags, measure the image and replay it",
+        help="Compile and link a kiln.yaml spec or KIR bundle under strict flags, then replay it",
     )
-    p_link.add_argument("spec", help="Path to the kiln.yaml task specification")
+    p_link.add_argument(
+        "spec", help="Path to a kiln.yaml task specification or a KIR v1 *.kir.json bundle"
+    )
     p_link.add_argument(
         "-o", "--output", default=None, help="Output directory (default: <spec dir>/link)"
     )

@@ -131,8 +131,9 @@ A task is a YAML spec, and the budget gate is part of the build:
 ```bash
 python -m kiln build examples/hazard/kiln.yaml            # kiln.yaml -> model.c + budget_certificate.txt
 python -m kiln search examples/hazard/kiln-search.yaml    # RAM/ROM/capacity Pareto front (hazard only)
-python -m kiln vm model.kir.json --json --trace         # execute a portable KIR v1 bundle
-python -m kiln link examples/hazard/kiln.yaml --run       # strict compile + link + image measurement + replay
+python -m kiln vm model.kir.json --json --trace           # execute a portable KIR v1 bundle
+python -m kiln link model.kir.json --run                  # bundle -> strict link -> replay
+python -m kiln link examples/hazard/kiln.yaml --run       # spec -> strict compile + link + replay
 python -m kiln link examples/hazard/kiln.yaml --target cortex-m3-qemu --run  # freestanding Cortex-M3/QEMU replay
 python -m kiln link examples/hazard/kiln.yaml --target cortex-m4 --runner-config examples/hardware/runner.example.json --run  # board runner
 ```
@@ -170,6 +171,11 @@ which is where the zero-malloc guarantee becomes an observation
 harness replays five fixed byte vectors and the tests compare the labels a linked
 program prints against `kiln.ref`, for the int8 KWS model and the uint8 hazard
 student alike.
+
+When the input ends in `.kir.json`, `kiln link` consumes the bundle directly and
+does not import PyTorch or resolve a Python model factory. It uses the conservative
+default resource envelope (2 KiB arena / 40 KiB ROM) because a standalone KIR
+bundle carries graph semantics, not application-specific deployment budgets.
 
 ## Phase 1 certificate (keyword spotting, shipped model)
 

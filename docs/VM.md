@@ -45,6 +45,20 @@ python -m kiln vm examples/vm/hello.kir.json \
   --input examples/vm/input.json --json --trace
 ```
 
+The same frozen bundle can be taken all the way to a strict linked host image:
+
+```bash
+python -m kiln validate examples/vm/hello.kir.json
+python -m kiln compile-kir examples/vm/hello.kir.json \
+  -o build/tutorial_model.c --runtime-header None
+python -m kiln link examples/vm/hello.kir.json --run \
+  --output build/tutorial-link
+```
+
+Direct bundle linking does not import PyTorch. It generates the same deterministic
+replay harness used by declarative specs, measures the linked image, and checks
+the five fixed predictions against the KIR reference path.
+
 ## Execution contract
 
 The VM supports the complete KIR v1 instruction set:

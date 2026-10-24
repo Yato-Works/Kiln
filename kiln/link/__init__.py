@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .engine import LinkOutcome, link_spec
+from .engine import LinkOutcome, bundle_spec, link_bundle, link_spec
 from .harness import (
     VECTOR_NAMES,
     harness_vectors,
@@ -26,6 +26,7 @@ __all__ = (
     "MALLOC_SYMBOLS",
     "STRICT_FLAGS",
     "LinkOutcome",
+    "bundle_spec",
     "Toolchain",
     "ToolchainError",
     "VECTOR_NAMES",
@@ -40,6 +41,7 @@ __all__ = (
     "harness_vectors",
     "inspect_sections",
     "link_spec",
+    "link_bundle",
     "parse_predictions",
     "render_harness",
     "to_input_domain",

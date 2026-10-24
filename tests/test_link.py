@@ -25,6 +25,7 @@ from kiln.ir.kir import DType
 from kiln.link import (
     STRICT_FLAGS,
     ToolchainError,
+    link_bundle,
     detect_toolchain,
     harness_vectors,
     link_spec,
@@ -40,6 +41,7 @@ from kiln.link.target_runtime import CORTEX_M_STARTUP_C
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HAZARD_SPEC = REPO_ROOT / "examples" / "hazard" / "kiln.yaml"
 KWS_SPEC = REPO_ROOT / "examples" / "kws" / "kiln.yaml"
+VM_BUNDLE = REPO_ROOT / "examples" / "vm" / "hello.kir.json"
 
 
 def _has_compiler() -> bool:
@@ -226,6 +228,32 @@ def test_link_hazard_binary_is_bit_exact_against_the_reference(temp_dir: Path) -
     assert outcome.arena_matches is True
     assert outcome.rom_covers_weights is True
     assert outcome.malloc_symbols == frozenset()
+
+
+@requires_compiler
+def test_link_kir_bundle_runs_without_a_python_frontend(temp_dir: Path) -> None:
+    """A frozen KIR bundle is enough to produce and replay a linked image."""
+    outcome = link_bundle(VM_BUNDLE, out_dir=temp_dir / "bundle", run=True)
+
+    assert outcome.spec_name == "hello"
+    assert outcome.predictions == (0, 0, 0, 0, 3)
+    assert [path.name for path in outcome.sources] == ["model.c", "harness.c"]
+    assert outcome.report.arena_ram_bytes == 8
+    assert outcome.report.total_rom_bytes == 256
+    assert outcome.malloc_symbols == frozenset()
+    assert outcome.arena_matches is True
+
+
+@requires_compiler
+def test_cli_link_accepts_a_kir_bundle(temp_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    out_dir = temp_dir / "bundle"
+
+    assert main(["link", str(VM_BUNDLE), "--run", "--output", str(out_dir)]) == 0
+
+    captured = capsys.readouterr()
+    assert "Kiln Link Report: hello" in captured.out
+    assert "zeros=0, alternating=0, high=0, low=0, ramp=3" in captured.out
+    assert (out_dir / "link_report.txt").is_file()
 
 
 @requires_compiler
