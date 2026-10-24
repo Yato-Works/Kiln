@@ -854,7 +854,11 @@ def cmd_vm(args: argparse.Namespace) -> int:
         print(f"int32 safety  : {'SAFE' if result.metrics.int32_overflow_free else 'UNVERIFIED'}")
         if args.trace:
             for event in result.trace:
-                print(f"  {event.node:<20} {event.op:<10} {event.cycles:>8} cycles")
+                print(
+                    f"  {event.node:<20} {event.op:<10} {event.cycles:>8} cycles "
+                    f"n={event.output_count} range=[{event.output_min},{event.output_max}] "
+                    f"sha256={event.output_digest[:12]}"
+                )
     return 0
 
 

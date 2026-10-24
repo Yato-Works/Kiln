@@ -48,6 +48,9 @@ def test_vm_loads_bundle_and_reports_deterministic_metrics(tmp_path: Path) -> No
     assert first.metrics.allocation_bytes == 0
     assert first.metrics.int32_overflow_free is True
     assert [event.op for event in first.trace] == ["lut", "argmax"]
+    assert first.trace[0].output_count == 2
+    assert first.trace[0].output_min == -2
+    assert len(first.trace[0].output_digest) == 64
 
 
 def test_vm_rejects_invalid_input_domain(tmp_path: Path) -> None:

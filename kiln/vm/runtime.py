@@ -10,6 +10,7 @@ model, not a claim about a particular CPU's clock cycles.
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -50,6 +51,10 @@ class VMTraceEvent:
     inputs: tuple[str, ...]
     outputs: tuple[str, ...]
     cycles: int
+    output_count: int
+    output_min: int | None
+    output_max: int | None
+    output_digest: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +89,10 @@ def trace_to_dict(trace: Sequence[VMTraceEvent]) -> list[dict[str, Any]]:
             "inputs": list(event.inputs),
             "outputs": list(event.outputs),
             "cycles": event.cycles,
+            "output_count": event.output_count,
+            "output_min": event.output_min,
+            "output_max": event.output_max,
+            "output_digest": event.output_digest,
         }
         for event in trace
     ]
@@ -97,7 +106,17 @@ def trace_from_dict(document: Any) -> tuple[VMTraceEvent, ...]:
     for index, raw in enumerate(document):
         if not isinstance(raw, Mapping):
             raise VMError(f"VM trace event {index} must be an object")
-        required = {"node", "op", "inputs", "outputs", "cycles"}
+        required = {
+            "node",
+            "op",
+            "inputs",
+            "outputs",
+            "cycles",
+            "output_count",
+            "output_min",
+            "output_max",
+            "output_digest",
+        }
         if set(raw) != required:
             raise VMError(f"VM trace event {index} has invalid fields")
         if not isinstance(raw["node"], str) or not isinstance(raw["op"], str):
@@ -112,6 +131,13 @@ def trace_from_dict(document: Any) -> tuple[VMTraceEvent, ...]:
             raise VMError(f"VM trace event {index} outputs must be a string array")
         if not _is_int(raw["cycles"]) or raw["cycles"] < 0:
             raise VMError(f"VM trace event {index} cycles must be a non-negative integer")
+        if not _is_int(raw["output_count"]) or raw["output_count"] < 0:
+            raise VMError(f"VM trace event {index} output_count must be non-negative")
+        for key in ("output_min", "output_max"):
+            if raw[key] is not None and not _is_int(raw[key]):
+                raise VMError(f"VM trace event {index} {key} must be an integer or null")
+        if not isinstance(raw["output_digest"], str) or len(raw["output_digest"]) != 64:
+            raise VMError(f"VM trace event {index} output_digest must be a SHA-256 hex digest")
         events.append(
             VMTraceEvent(
                 raw["node"],
@@ -119,6 +145,10 @@ def trace_from_dict(document: Any) -> tuple[VMTraceEvent, ...]:
                 tuple(raw["inputs"]),
                 tuple(raw["outputs"]),
                 raw["cycles"],
+                raw["output_count"],
+                raw["output_min"],
+                raw["output_max"],
+                raw["output_digest"],
             )
         )
     return tuple(events)
@@ -126,6 +156,11 @@ def trace_from_dict(document: Any) -> tuple[VMTraceEvent, ...]:
 
 def _is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _output_digest(values: Sequence[int]) -> str:
+    """Stable byte-level digest without dumping potentially large tensors."""
+    return hashlib.sha256(bytes(value & 0xFF for value in values)).hexdigest()
 
 
 def _materialize(value: Any) -> tuple[tuple[int, ...], tuple[int, ...]]:
@@ -456,6 +491,10 @@ class VirtualMachine:
                     tuple(node.inputs),
                     tuple(node.outputs),
                     node_cycles,
+                    len(values),
+                    min(values) if values else None,
+                    max(values) if values else None,
+                    _output_digest(values),
                 )
             )
 

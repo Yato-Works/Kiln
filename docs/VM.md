@@ -34,7 +34,9 @@ inputs, which is useful for smoke tests.
 ```
 
 The `--json` output contains `outputs`, `metrics`, and, with `--trace`, one event
-for each KIR node.
+for each KIR node. Each event records the output element count, range, and a
+SHA-256 digest instead of dumping the entire tensor. This keeps traces useful
+for large models while making accidental changes obvious.
 
 The repository's board-free smoke test is runnable from a clean checkout:
 
